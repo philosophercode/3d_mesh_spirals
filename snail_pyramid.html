@@ -1,0 +1,974 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Snail Pyramid Explorer</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        #canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+
+    <script src="https://cdn.jsdelivr.net/npm/dat.gui@0.7.9/build/dat.gui.min.js"></script>
+    <script async src="https://unpkg.com/es-module-shims@1.6.3/dist/es-module-shims.js"></script>
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // ===== SETUP =====
+        const canvas = document.getElementById('canvas');
+        const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+        const scene = new THREE.Scene();
+
+        // Setup both cameras
+        const aspect = window.innerWidth / window.innerHeight;
+        const orthoSize = 3;
+        const orthoCamera = new THREE.OrthographicCamera(
+            -orthoSize * aspect, orthoSize * aspect, orthoSize, -orthoSize, 0.1, 1000
+        );
+        const perspCamera = new THREE.PerspectiveCamera(50, aspect, 0.1, 1000);
+
+        let camera = orthoCamera;
+        orthoCamera.position.set(5, 4, 5);
+        perspCamera.position.set(5, 4, 5);
+
+        const orbitControls = new OrbitControls(camera, canvas);
+        orbitControls.enableDamping = true;
+        orbitControls.dampingFactor = 0.05;
+
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(5, 10, 7);
+        scene.add(dirLight);
+
+        // Grid helper
+        const gridHelper = new THREE.GridHelper(10, 10, 0x444444, 0x222222);
+        scene.add(gridHelper);
+
+        // ===== GEOMETRY BUILDER =====
+        let meshGroup = new THREE.Group();
+        scene.add(meshGroup);
+
+        function computeRadiusAtU(u, params) {
+            let r;
+            if (params.mode === 'Exponential') {
+                r = params.r0 * Math.exp(-params.k * u);
+            } else {
+                r = params.r0 - params.alpha * u;
+            }
+            return Math.max(r, params.rMin);
+        }
+
+        function buildGeometry(params) {
+            const vertices = [];
+            const indices = [];
+            const uMax = 2 * Math.PI * params.N;
+
+            // Generate vertices for outer surface
+            for (let i = 0; i <= params.uDiv; i++) {
+                const u = uMax * i / params.uDiv;
+                const rTube = computeRadiusAtU(u, params);
+
+                for (let j = 0; j <= params.vDiv; j++) {
+                    const vBase = 2 * Math.PI * j / params.vDiv;
+                    const v = vBase + params.twist * (u / (2 * Math.PI));
+
+                    const rt = rTube * (1 + params.epsilon * Math.cos(v));
+                    const x = (params.R + rt * Math.cos(v)) * Math.cos(u);
+                    const y = (params.R + rt * Math.cos(v)) * Math.sin(u);
+                    const z = rt * Math.sin(v) + params.h * (u / (2 * Math.PI));
+
+                    vertices.push(x, y, z);
+                }
+            }
+
+            // Generate indices for outer surface triangles
+            for (let i = 0; i < params.uDiv; i++) {
+                for (let j = 0; j < params.vDiv; j++) {
+                    const a = i * (params.vDiv + 1) + j;
+                    const b = (i + 1) * (params.vDiv + 1) + j;
+                    const c = (i + 1) * (params.vDiv + 1) + (j + 1);
+                    const d = i * (params.vDiv + 1) + (j + 1);
+
+                    indices.push(a, b, d);
+                    indices.push(b, c, d);
+                }
+            }
+
+            const geometry = new THREE.BufferGeometry();
+            geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+            geometry.setIndex(indices);
+            geometry.computeVertexNormals();
+
+            return geometry;
+        }
+
+        // Build thick wall geometry (outer + inner + caps)
+        function buildThickWallGeometry(params) {
+            const vertices = [];
+            const indices = [];
+            const uMax = 2 * Math.PI * params.N;
+            const numOuterVerts = (params.uDiv + 1) * (params.vDiv + 1);
+
+            // Generate vertices for OUTER surface
+            for (let i = 0; i <= params.uDiv; i++) {
+                const u = uMax * i / params.uDiv;
+                const rTube = computeRadiusAtU(u, params);
+
+                for (let j = 0; j <= params.vDiv; j++) {
+                    const vBase = 2 * Math.PI * j / params.vDiv;
+                    const v = vBase + params.twist * (u / (2 * Math.PI));
+
+                    const rt = rTube * (1 + params.epsilon * Math.cos(v));
+                    const x = (params.R + rt * Math.cos(v)) * Math.cos(u);
+                    const y = (params.R + rt * Math.cos(v)) * Math.sin(u);
+                    const z = rt * Math.sin(v) + params.h * (u / (2 * Math.PI));
+
+                    vertices.push(x, y, z);
+                }
+            }
+
+            // Generate vertices for INNER surface
+            for (let i = 0; i <= params.uDiv; i++) {
+                const u = uMax * i / params.uDiv;
+                const rTube = computeRadiusAtU(u, params);
+                const rTubeInner = rTube - params.wallThickness;
+
+                for (let j = 0; j <= params.vDiv; j++) {
+                    const vBase = 2 * Math.PI * j / params.vDiv;
+                    const v = vBase + params.twist * (u / (2 * Math.PI));
+
+                    const rt = rTubeInner * (1 + params.epsilon * Math.cos(v));
+                    const x = (params.R + rt * Math.cos(v)) * Math.cos(u);
+                    const y = (params.R + rt * Math.cos(v)) * Math.sin(u);
+                    const z = rt * Math.sin(v) + params.h * (u / (2 * Math.PI));
+
+                    vertices.push(x, y, z);
+                }
+            }
+
+            // Outer surface triangles
+            for (let i = 0; i < params.uDiv; i++) {
+                for (let j = 0; j < params.vDiv; j++) {
+                    const a = i * (params.vDiv + 1) + j;
+                    const b = (i + 1) * (params.vDiv + 1) + j;
+                    const c = (i + 1) * (params.vDiv + 1) + (j + 1);
+                    const d = i * (params.vDiv + 1) + (j + 1);
+
+                    indices.push(a, b, d);
+                    indices.push(b, c, d);
+                }
+            }
+
+            // Inner surface triangles (reversed winding)
+            for (let i = 0; i < params.uDiv; i++) {
+                for (let j = 0; j < params.vDiv; j++) {
+                    const a = numOuterVerts + i * (params.vDiv + 1) + j;
+                    const b = numOuterVerts + (i + 1) * (params.vDiv + 1) + j;
+                    const c = numOuterVerts + (i + 1) * (params.vDiv + 1) + (j + 1);
+                    const d = numOuterVerts + i * (params.vDiv + 1) + (j + 1);
+
+                    indices.push(a, d, b);
+                    indices.push(b, d, c);
+                }
+            }
+
+            // Cap at start (u=0)
+            for (let j = 0; j < params.vDiv; j++) {
+                const outerA = j;
+                const outerB = j + 1;
+                const innerA = numOuterVerts + j;
+                const innerB = numOuterVerts + j + 1;
+
+                indices.push(outerA, innerA, outerB);
+                indices.push(outerB, innerA, innerB);
+            }
+
+            // Cap at end (u=uMax)
+            const lastRing = params.uDiv * (params.vDiv + 1);
+            for (let j = 0; j < params.vDiv; j++) {
+                const outerA = lastRing + j;
+                const outerB = lastRing + j + 1;
+                const innerA = numOuterVerts + lastRing + j;
+                const innerB = numOuterVerts + lastRing + j + 1;
+
+                indices.push(outerA, outerB, innerA);
+                indices.push(outerB, innerB, innerA);
+            }
+
+            const geometry = new THREE.BufferGeometry();
+            geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+            geometry.setIndex(indices);
+            geometry.computeVertexNormals();
+
+            return geometry;
+        }
+
+        function buildWireframeLines(params) {
+            const uMax = 2 * Math.PI * params.N;
+
+            // Helper to compute position with optional inner surface offset
+            function getPosition(u, v, isInner = false) {
+                const rTube = computeRadiusAtU(u, params);
+                const vTwisted = v + params.twist * (u / (2 * Math.PI));
+
+                // Apply wall thickness for inner surface
+                const effectiveRTube = isInner ? rTube - params.wallThickness : rTube;
+                const rt = effectiveRTube * (1 + params.epsilon * Math.cos(vTwisted));
+
+                const x = (params.R + rt * Math.cos(vTwisted)) * Math.cos(u);
+                const y = (params.R + rt * Math.cos(vTwisted)) * Math.sin(u);
+                const z = rt * Math.sin(vTwisted) + params.h * (u / (2 * Math.PI));
+                return new THREE.Vector3(x, y, z);
+            }
+
+            // Build lines for a surface (outer or inner)
+            function buildSurfaceLines(isInner, color) {
+                const surfaceLines = [];
+
+                // Meridians (constant v, varying u) - show many more lines for Denes look
+                if (params.showMeridians) {
+                    const vStep = Math.max(1, Math.floor(params.vDiv / 48)); // doubled density
+                    for (let j = 0; j < params.vDiv; j += vStep) {
+                        const points = [];
+                        const v = 2 * Math.PI * j / params.vDiv;
+                        for (let i = 0; i <= params.uDiv; i++) {
+                            const u = uMax * i / params.uDiv;
+                            points.push(getPosition(u, v, isInner));
+                        }
+                        const geometry = new THREE.BufferGeometry().setFromPoints(points);
+                        const line = new THREE.Line(geometry, new THREE.LineBasicMaterial({
+                            color: color,
+                            linewidth: params.lineWidth,
+                            transparent: isInner,
+                            opacity: isInner ? 0.7 : 1.0
+                        }));
+                        surfaceLines.push(line);
+                    }
+                }
+
+                // Parallels (constant u, varying v) - show many more lines for Denes look
+                if (params.showParallels) {
+                    const uStep = Math.max(1, Math.floor(params.uDiv / 80)); // much denser
+                    for (let i = 0; i <= params.uDiv; i += uStep) {
+                        const points = [];
+                        const u = uMax * i / params.uDiv;
+                        for (let j = 0; j <= params.vDiv; j++) {
+                            const v = 2 * Math.PI * j / params.vDiv;
+                            points.push(getPosition(u, v, isInner));
+                        }
+                        const geometry = new THREE.BufferGeometry().setFromPoints(points);
+                        const line = new THREE.Line(geometry, new THREE.LineBasicMaterial({
+                            color: color,
+                            linewidth: params.lineWidth,
+                            transparent: isInner,
+                            opacity: isInner ? 0.7 : 1.0
+                        }));
+                        surfaceLines.push(line);
+                    }
+                }
+
+                return surfaceLines;
+            }
+
+            // Build outer surface
+            const outerColor = new THREE.Color(params.outerColor);
+            const outerLines = buildSurfaceLines(false, outerColor);
+
+            // Build inner surface if enabled
+            const innerLines = params.showInnerSurface ? buildSurfaceLines(true, new THREE.Color(params.innerColor)) : [];
+
+            // Build wall depth lines at caps (start and end)
+            const depthLines = [];
+            if (params.showInnerSurface) {
+                // Start cap (u=0) - outer edge
+                const startOuterPoints = [];
+                for (let j = 0; j <= params.vDiv; j++) {
+                    const v = 2 * Math.PI * j / params.vDiv;
+                    startOuterPoints.push(getPosition(0, v, false));
+                }
+                const startOuterGeom = new THREE.BufferGeometry().setFromPoints(startOuterPoints);
+                const startOuterLine = new THREE.Line(startOuterGeom, new THREE.LineBasicMaterial({
+                    color: outerColor,
+                    linewidth: params.lineWidth
+                }));
+                depthLines.push(startOuterLine);
+
+                // Start cap (u=0) - inner edge
+                const startInnerPoints = [];
+                for (let j = 0; j <= params.vDiv; j++) {
+                    const v = 2 * Math.PI * j / params.vDiv;
+                    startInnerPoints.push(getPosition(0, v, true));
+                }
+                const startInnerGeom = new THREE.BufferGeometry().setFromPoints(startInnerPoints);
+                const startInnerLine = new THREE.Line(startInnerGeom, new THREE.LineBasicMaterial({
+                    color: new THREE.Color(params.innerColor),
+                    linewidth: params.lineWidth,
+                    transparent: true,
+                    opacity: 0.7
+                }));
+                depthLines.push(startInnerLine);
+
+                // End cap (u=uMax) - outer edge
+                const endOuterPoints = [];
+                for (let j = 0; j <= params.vDiv; j++) {
+                    const v = 2 * Math.PI * j / params.vDiv;
+                    endOuterPoints.push(getPosition(uMax, v, false));
+                }
+                const endOuterGeom = new THREE.BufferGeometry().setFromPoints(endOuterPoints);
+                const endOuterLine = new THREE.Line(endOuterGeom, new THREE.LineBasicMaterial({
+                    color: outerColor,
+                    linewidth: params.lineWidth
+                }));
+                depthLines.push(endOuterLine);
+
+                // End cap (u=uMax) - inner edge
+                const endInnerPoints = [];
+                for (let j = 0; j <= params.vDiv; j++) {
+                    const v = 2 * Math.PI * j / params.vDiv;
+                    endInnerPoints.push(getPosition(uMax, v, true));
+                }
+                const endInnerGeom = new THREE.BufferGeometry().setFromPoints(endInnerPoints);
+                const endInnerLine = new THREE.Line(endInnerGeom, new THREE.LineBasicMaterial({
+                    color: new THREE.Color(params.innerColor),
+                    linewidth: params.lineWidth,
+                    transparent: true,
+                    opacity: 0.7
+                }));
+                depthLines.push(endInnerLine);
+            }
+
+            return { outerLines, innerLines, depthLines };
+        }
+
+        // Build cross-section wall at a specific u position
+        function buildCrossSectionWall(params, u) {
+            const rTube = computeRadiusAtU(u, params);
+
+            const vertices = [];
+            const indices = [];
+
+            // Generate vertices for the cross-section ring (outer and inner edges)
+            for (let j = 0; j <= params.vDiv; j++) {
+                const vBase = 2 * Math.PI * j / params.vDiv;
+                const v = vBase + params.twist * (u / (2 * Math.PI));
+
+                // Outer edge vertex
+                const rtOuter = rTube * (1 + params.epsilon * Math.cos(v));
+                const xOuter = (params.R + rtOuter * Math.cos(v)) * Math.cos(u);
+                const yOuter = (params.R + rtOuter * Math.cos(v)) * Math.sin(u);
+                const zOuter = rtOuter * Math.sin(v) + params.h * (u / (2 * Math.PI));
+                vertices.push(xOuter, yOuter, zOuter);
+
+                // Inner edge vertex
+                const rTubeInner = rTube - params.wallThickness;
+                const rtInner = rTubeInner * (1 + params.epsilon * Math.cos(v));
+                const xInner = (params.R + rtInner * Math.cos(v)) * Math.cos(u);
+                const yInner = (params.R + rtInner * Math.cos(v)) * Math.sin(u);
+                const zInner = rtInner * Math.sin(v) + params.h * (u / (2 * Math.PI));
+                vertices.push(xInner, yInner, zInner);
+            }
+
+            // Generate triangles for the cross-section wall
+            for (let j = 0; j < params.vDiv; j++) {
+                const outerA = j * 2;
+                const innerA = j * 2 + 1;
+                const outerB = (j + 1) * 2;
+                const innerB = (j + 1) * 2 + 1;
+
+                // Create quad as two triangles
+                indices.push(outerA, outerB, innerA);
+                indices.push(outerB, innerB, innerA);
+            }
+
+            const geometry = new THREE.BufferGeometry();
+            geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+            geometry.setIndex(indices);
+            geometry.computeVertexNormals();
+
+            return geometry;
+        }
+
+        // Build wireframe outline for cross-section wall with dense grid
+        function buildCrossSectionWireframe(params, u) {
+            const rTube = computeRadiusAtU(u, params);
+
+            const outerPoints = [];
+            const innerPoints = [];
+
+            for (let j = 0; j <= params.vDiv; j++) {
+                const vBase = 2 * Math.PI * j / params.vDiv;
+                const v = vBase + params.twist * (u / (2 * Math.PI));
+
+                // Outer edge
+                const rtOuter = rTube * (1 + params.epsilon * Math.cos(v));
+                const xOuter = (params.R + rtOuter * Math.cos(v)) * Math.cos(u);
+                const yOuter = (params.R + rtOuter * Math.cos(v)) * Math.sin(u);
+                const zOuter = rtOuter * Math.sin(v) + params.h * (u / (2 * Math.PI));
+                outerPoints.push(new THREE.Vector3(xOuter, yOuter, zOuter));
+
+                // Inner edge
+                const rTubeInner = rTube - params.wallThickness;
+                const rtInner = rTubeInner * (1 + params.epsilon * Math.cos(v));
+                const xInner = (params.R + rtInner * Math.cos(v)) * Math.cos(u);
+                const yInner = (params.R + rtInner * Math.cos(v)) * Math.sin(u);
+                const zInner = rtInner * Math.sin(v) + params.h * (u / (2 * Math.PI));
+                innerPoints.push(new THREE.Vector3(xInner, yInner, zInner));
+            }
+
+            const lines = [];
+
+            // Outer edge line (thicker)
+            const outerGeom = new THREE.BufferGeometry().setFromPoints(outerPoints);
+            const outerLine = new THREE.Line(outerGeom, new THREE.LineBasicMaterial({
+                color: new THREE.Color(params.crossSectionColor),
+                linewidth: params.lineWidth * 2
+            }));
+            lines.push(outerLine);
+
+            // Inner edge line (thicker)
+            const innerGeom = new THREE.BufferGeometry().setFromPoints(innerPoints);
+            const innerLine = new THREE.Line(innerGeom, new THREE.LineBasicMaterial({
+                color: new THREE.Color(params.crossSectionColor),
+                linewidth: params.lineWidth * 2
+            }));
+            lines.push(innerLine);
+
+            // Dense radial spokes connecting outer to inner
+            const spokeStep = Math.max(1, Math.floor(params.vDiv / params.crossSectionSpokes));
+            for (let j = 0; j < params.vDiv; j += spokeStep) {
+                const spokePoints = [outerPoints[j], innerPoints[j]];
+                const spokeGeom = new THREE.BufferGeometry().setFromPoints(spokePoints);
+                const spokeLine = new THREE.Line(spokeGeom, new THREE.LineBasicMaterial({
+                    color: new THREE.Color(params.crossSectionColor),
+                    linewidth: params.lineWidth
+                }));
+                lines.push(spokeLine);
+            }
+
+            // Concentric circles at different radii
+            for (let c = 1; c <= params.crossSectionCircles; c++) {
+                const t = c / (params.crossSectionCircles + 1);
+                const circlePoints = [];
+
+                for (let j = 0; j <= params.vDiv; j++) {
+                    const vBase = 2 * Math.PI * j / params.vDiv;
+                    const v = vBase + params.twist * (u / (2 * Math.PI));
+
+                    // Interpolate between inner and outer
+                    const rTubeInner = rTube - params.wallThickness;
+                    const rtOuter = rTube * (1 + params.epsilon * Math.cos(v));
+                    const rtInner = rTubeInner * (1 + params.epsilon * Math.cos(v));
+                    const rt = rtInner + t * (rtOuter - rtInner);
+
+                    const x = (params.R + rt * Math.cos(v)) * Math.cos(u);
+                    const y = (params.R + rt * Math.cos(v)) * Math.sin(u);
+                    const z = rt * Math.sin(v) + params.h * (u / (2 * Math.PI));
+                    circlePoints.push(new THREE.Vector3(x, y, z));
+                }
+
+                const circleGeom = new THREE.BufferGeometry().setFromPoints(circlePoints);
+                const circleLine = new THREE.Line(circleGeom, new THREE.LineBasicMaterial({
+                    color: new THREE.Color(params.crossSectionColor),
+                    linewidth: params.lineWidth,
+                    transparent: true,
+                    opacity: 0.6
+                }));
+                lines.push(circleLine);
+            }
+
+            return lines;
+        }
+
+        function updateMesh(params) {
+            // Clear existing mesh
+            meshGroup.clear();
+
+            if (params.renderStyle === 'Solid') {
+                const geometry = buildGeometry(params);
+                const material = new THREE.MeshStandardMaterial({
+                    color: 0x6699cc,
+                    side: THREE.DoubleSide,
+                    metalness: 0.3,
+                    roughness: 0.6
+                });
+                const mesh = new THREE.Mesh(geometry, material);
+                meshGroup.add(mesh);
+            } else if (params.renderStyle === 'Wireframe') {
+                const { outerLines, innerLines, depthLines } = buildWireframeLines(params);
+
+                // If occlusion is enabled, use thick wall geometry for proper depth
+                if (params.occludeInner) {
+                    // Use thick wall geometry including inner surface, outer surface, and caps
+                    const thickGeometry = buildThickWallGeometry(params);
+                    const depthMaterial = new THREE.MeshBasicMaterial({
+                        colorWrite: false,
+                        side: THREE.FrontSide  // Only render front faces for occlusion
+                    });
+                    const depthMesh = new THREE.Mesh(thickGeometry, depthMaterial);
+                    meshGroup.add(depthMesh);
+
+                    // Render lines with depth testing
+                    [...outerLines, ...innerLines, ...depthLines].forEach(line => {
+                        line.material.depthTest = true;
+                        line.material.depthWrite = false;
+                        line.renderOrder = 1;
+                        meshGroup.add(line);
+                    });
+                } else {
+                    // No occlusion - render lines normally
+                    outerLines.forEach(line => meshGroup.add(line));
+                    innerLines.forEach(line => meshGroup.add(line));
+                    depthLines.forEach(line => meshGroup.add(line));
+                }
+            } else if (params.renderStyle === 'Hidden-line') {
+                // Hidden-line always uses thick wall geometry for proper occlusion
+                const thickGeometry = buildThickWallGeometry(params);
+                const depthMaterial = new THREE.MeshBasicMaterial({
+                    colorWrite: false,
+                    side: THREE.FrontSide  // Only render front faces for occlusion
+                });
+                const depthMesh = new THREE.Mesh(thickGeometry, depthMaterial);
+                meshGroup.add(depthMesh);
+
+                // Wireframe on top with depth testing
+                const { outerLines, innerLines, depthLines } = buildWireframeLines(params);
+                [...outerLines, ...innerLines, ...depthLines].forEach(line => {
+                    line.material.depthTest = true;
+                    line.material.depthWrite = false;
+                    line.renderOrder = 1;
+                    meshGroup.add(line);
+                });
+            }
+
+            // Add cross-section walls at both ends if enabled
+            if (params.showCrossSection) {
+                const uMax = 2 * Math.PI * params.N;
+                const uPositions = [0, uMax]; // Start and end
+
+                uPositions.forEach(u => {
+                    if (params.renderStyle === 'Solid') {
+                        // Render solid cross-section
+                        const csGeometry = buildCrossSectionWall(params, u);
+                        const csMaterial = new THREE.MeshStandardMaterial({
+                            color: params.crossSectionColor,
+                            side: THREE.DoubleSide,
+                            metalness: 0.5,
+                            roughness: 0.4
+                        });
+                        const csMesh = new THREE.Mesh(csGeometry, csMaterial);
+                        meshGroup.add(csMesh);
+                    } else {
+                        // Render invisible depth mesh for cross-section to occlude lines behind it
+                        const csGeometry = buildCrossSectionWall(params, u);
+                        const csDepthMaterial = new THREE.MeshBasicMaterial({
+                            colorWrite: false,
+                            side: THREE.DoubleSide
+                        });
+                        const csDepthMesh = new THREE.Mesh(csGeometry, csDepthMaterial);
+                        meshGroup.add(csDepthMesh);
+
+                        // Render wireframe cross-section on top
+                        const csLines = buildCrossSectionWireframe(params, u);
+                        csLines.forEach(line => {
+                            line.material.depthTest = true;
+                            line.material.depthWrite = false;
+                            line.renderOrder = 2; // Render on top
+                            meshGroup.add(line);
+                        });
+                    }
+                });
+            }
+        }
+
+        // ===== PARAMETERS & UI =====
+        // Default to Denes Original preset
+        const defaultParams = {
+            // Geometry
+            N: 2.75,
+            R: 1.65,
+            r0: 0.55,
+            mode: 'Exponential',
+            k: 0.18,
+            alpha: 0.1,
+            rMin: 0.015,
+            h: 0.0,
+            epsilon: 0.08,
+            twist: 0.0,
+            wallThickness: 0.10,
+
+            // Mesh density - much higher for Denes look
+            uDiv: 320,
+            vDiv: 96,
+
+            // Rendering
+            projection: 'Orthographic',
+            renderStyle: 'Wireframe',
+            showMeridians: true,
+            showParallels: true,
+            showInnerSurface: true,
+            occludeInner: true,
+            lineWidth: 1,
+            outerColor: '#333333',
+            innerColor: '#555555',
+            backgroundColor: '#e8e8e8',
+            showGrid: false,
+
+            // Cross-section
+            showCrossSection: false,
+            crossSectionColor: '#ff3333',
+            crossSectionSpokes: 24,
+            crossSectionCircles: 3
+        };
+
+        let currentParams = { ...defaultParams };
+
+        // Initialize
+        scene.background = new THREE.Color(currentParams.backgroundColor);
+        gridHelper.visible = currentParams.showGrid;
+        updateMesh(currentParams);
+
+        // Setup dat.GUI controls
+        const gui = new dat.GUI({ width: 320 });
+
+        // Geometry folder
+        const geoFolder = gui.addFolder('Geometry');
+        geoFolder.add(currentParams, 'N', 0.5, 6, 0.1).name('Turns').onChange(() => updateMesh(currentParams));
+        geoFolder.add(currentParams, 'R', 0.1, 5, 0.05).name('Major radius').onChange(() => updateMesh(currentParams));
+        geoFolder.add(currentParams, 'r0', 0.02, 1.5, 0.01).name('Start tube radius').onChange(() => updateMesh(currentParams));
+        geoFolder.open();
+
+        // Decay folder
+        const decayFolder = gui.addFolder('Decay');
+        decayFolder.add(currentParams, 'mode', ['Exponential', 'Linear']).name('Decay type').onChange(() => updateMesh(currentParams));
+        decayFolder.add(currentParams, 'k', 0, 0.6, 0.01).name('Exponential rate').onChange(() => updateMesh(currentParams));
+        decayFolder.add(currentParams, 'alpha', 0, 0.2, 0.01).name('Linear rate').onChange(() => updateMesh(currentParams));
+        decayFolder.add(currentParams, 'rMin', 0, 0.3, 0.005).name('Min tube radius').onChange(() => updateMesh(currentParams));
+        decayFolder.open();
+
+        // Shape folder
+        const shapeFolder = gui.addFolder('Shape');
+        shapeFolder.add(currentParams, 'h', -2, 2, 0.1).name('Axial rise').onChange(() => updateMesh(currentParams));
+        shapeFolder.add(currentParams, 'epsilon', 0, 0.5, 0.01).name('Eccentricity').onChange(() => updateMesh(currentParams));
+        shapeFolder.add(currentParams, 'twist', -2 * Math.PI, 2 * Math.PI, 0.1).name('Cross-section twist').onChange(() => updateMesh(currentParams));
+        shapeFolder.add(currentParams, 'wallThickness', 0, 0.3, 0.01).name('Wall thickness').onChange(() => updateMesh(currentParams));
+        shapeFolder.open();
+
+        // Mesh folder
+        const meshFolder = gui.addFolder('Mesh');
+        meshFolder.add(currentParams, 'uDiv', 16, 480, 8).name('U divisions').onChange(() => updateMesh(currentParams));
+        meshFolder.add(currentParams, 'vDiv', 16, 160, 4).name('V divisions').onChange(() => updateMesh(currentParams));
+        meshFolder.open();
+
+        // Rendering folder
+        const renderFolder = gui.addFolder('Rendering');
+        renderFolder.add(currentParams, 'projection', ['Orthographic', 'Perspective']).name('Projection').onChange((value) => {
+            camera = value === 'Orthographic' ? orthoCamera : perspCamera;
+            orbitControls.object = camera;
+            camera.position.copy(orbitControls.target).add(new THREE.Vector3(5, 4, 5));
+            orbitControls.update();
+        });
+        renderFolder.add(currentParams, 'renderStyle', ['Wireframe', 'Hidden-line', 'Solid']).name('Render style').onChange(() => updateMesh(currentParams));
+        renderFolder.add(currentParams, 'showMeridians').name('Show meridians').onChange(() => updateMesh(currentParams));
+        renderFolder.add(currentParams, 'showParallels').name('Show parallels').onChange(() => updateMesh(currentParams));
+        renderFolder.add(currentParams, 'showInnerSurface').name('Show inner surface').onChange(() => updateMesh(currentParams));
+        renderFolder.add(currentParams, 'occludeInner').name('Occlude inner mesh').onChange(() => updateMesh(currentParams));
+        renderFolder.add(currentParams, 'lineWidth', 1, 3, 0.5).name('Line width').onChange(() => updateMesh(currentParams));
+        renderFolder.addColor(currentParams, 'outerColor').name('Outer color').onChange(() => updateMesh(currentParams));
+        renderFolder.addColor(currentParams, 'innerColor').name('Inner color').onChange(() => updateMesh(currentParams));
+        renderFolder.addColor(currentParams, 'backgroundColor').name('Background').onChange((value) => {
+            scene.background = new THREE.Color(value);
+        });
+        renderFolder.add(currentParams, 'showGrid').name('Show grid').onChange((value) => {
+            gridHelper.visible = value;
+        });
+        renderFolder.open();
+
+        // Cross-section folder
+        const crossSectionFolder = gui.addFolder('Cross-Section');
+        crossSectionFolder.add(currentParams, 'showCrossSection').name('Show cross-section').onChange(() => updateMesh(currentParams));
+        crossSectionFolder.add(currentParams, 'crossSectionSpokes', 4, 48, 1).name('Radial spokes').onChange(() => updateMesh(currentParams));
+        crossSectionFolder.add(currentParams, 'crossSectionCircles', 0, 8, 1).name('Concentric circles').onChange(() => updateMesh(currentParams));
+        crossSectionFolder.addColor(currentParams, 'crossSectionColor').name('Color').onChange(() => updateMesh(currentParams));
+        crossSectionFolder.open();
+
+        // Presets folder
+        const presetsFolder = gui.addFolder('Presets');
+        presetsFolder.add({ preset: () => applyPreset('denesOriginal') }, 'preset').name('Denes Original');
+        presetsFolder.add({ preset: () => applyPreset('denes') }, 'preset').name('Denes-like');
+        presetsFolder.add({ preset: () => applyPreset('snail') }, 'preset').name('Snail tight');
+        presetsFolder.add({ preset: () => applyPreset('wide') }, 'preset').name('Wide torus');
+        presetsFolder.add({ preset: () => applyPreset('flat') }, 'preset').name('Flat coil');
+
+        // Export folder
+        const exportFolder = gui.addFolder('Export');
+        exportFolder.add({ export: downloadPNG }, 'export').name('Download PNG');
+        exportFolder.add({ export: downloadSVG }, 'export').name('Download SVG');
+        exportFolder.add({ export: copyJSON }, 'export').name('Copy JSON');
+        exportFolder.add({ export: saveJSON }, 'export').name('Save preset to file');
+        exportFolder.add({ export: loadJSON }, 'export').name('Load preset from file');
+
+        function applyPreset(preset) {
+            const presets = {
+                denesOriginal: {
+                    // Exact match for the Denes drawing - high density mesh
+                    N: 2.75, R: 1.65, r0: 0.55, mode: 'Exponential', k: 0.18, rMin: 0.015,
+                    h: 0.0, epsilon: 0.08, twist: 0.0, wallThickness: 0.10,
+                    uDiv: 320, vDiv: 96,
+                    projection: 'Orthographic', renderStyle: 'Wireframe',
+                    showMeridians: true, showParallels: true, showInnerSurface: true, occludeInner: true,
+                    lineWidth: 1,
+                    outerColor: '#333333', innerColor: '#555555',
+                    backgroundColor: '#e8e8e8', showGrid: false,
+                    showCrossSection: false, crossSectionColor: '#ff3333', crossSectionSpokes: 24, crossSectionCircles: 3
+                },
+                denes: {
+                    N: 2.75, R: 1.65, r0: 0.55, mode: 'Exponential', k: 0.18, rMin: 0.015,
+                    h: 0.0, epsilon: 0.08, twist: 0.0, wallThickness: 0.08,
+                    uDiv: 240, vDiv: 72,
+                    projection: 'Orthographic', renderStyle: 'Wireframe',
+                    showMeridians: true, showParallels: true, showInnerSurface: true, occludeInner: false,
+                    lineWidth: 1,
+                    outerColor: '#3388ff', innerColor: '#ff8833',
+                    backgroundColor: '#1a1a1a', showGrid: true,
+                    showCrossSection: false, crossSectionColor: '#ff3333', crossSectionSpokes: 24, crossSectionCircles: 3
+                },
+                snail: {
+                    N: 4.0, R: 1.2, r0: 0.8, mode: 'Exponential', k: 0.25, rMin: 0.01,
+                    h: 0.5, epsilon: 0.15, twist: 0.3, wallThickness: 0.10,
+                    uDiv: 280, vDiv: 64,
+                    projection: 'Perspective', renderStyle: 'Hidden-line',
+                    showMeridians: true, showParallels: true, showInnerSurface: true, occludeInner: true,
+                    lineWidth: 1,
+                    outerColor: '#4444ff', innerColor: '#8888ff',
+                    backgroundColor: '#0a0a0a', showGrid: false,
+                    showCrossSection: false, crossSectionColor: '#ff3333', crossSectionSpokes: 24, crossSectionCircles: 3
+                },
+                wide: {
+                    N: 1.5, R: 2.5, r0: 0.4, mode: 'Linear', alpha: 0.05, rMin: 0.05,
+                    h: 0.0, epsilon: 0.0, twist: 0.0, wallThickness: 0.05,
+                    uDiv: 200, vDiv: 80,
+                    projection: 'Orthographic', renderStyle: 'Solid',
+                    showMeridians: true, showParallels: false, showInnerSurface: false, occludeInner: false,
+                    lineWidth: 1,
+                    outerColor: '#6699cc', innerColor: '#99ccff',
+                    backgroundColor: '#1a1a1a', showGrid: true,
+                    showCrossSection: false, crossSectionColor: '#ff3333', crossSectionSpokes: 24, crossSectionCircles: 3
+                },
+                flat: {
+                    N: 5.0, R: 2.0, r0: 0.3, mode: 'Exponential', k: 0.12, rMin: 0.02,
+                    h: -0.2, epsilon: 0.0, twist: 0.0, wallThickness: 0.04,
+                    uDiv: 320, vDiv: 64,
+                    projection: 'Orthographic', renderStyle: 'Wireframe',
+                    showMeridians: true, showParallels: true, showInnerSurface: true, occludeInner: true,
+                    lineWidth: 1,
+                    outerColor: '#ff6644', innerColor: '#ffaa88',
+                    backgroundColor: '#1a1a1a', showGrid: true,
+                    showCrossSection: false, crossSectionColor: '#ff3333', crossSectionSpokes: 24, crossSectionCircles: 3
+                }
+            };
+
+            if (presets[preset]) {
+                Object.assign(currentParams, presets[preset]);
+                updateMesh(currentParams);
+
+                // Update GUI to reflect new values
+                gui.updateDisplay();
+
+                // Update camera if projection changed
+                camera = currentParams.projection === 'Orthographic' ? orthoCamera : perspCamera;
+                orbitControls.object = camera;
+
+                // Update background and grid
+                scene.background = new THREE.Color(currentParams.backgroundColor);
+                gridHelper.visible = currentParams.showGrid;
+            }
+        }
+
+        function downloadPNG() {
+            renderer.render(scene, camera);
+            canvas.toBlob((blob) => {
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `snail_pyramid_${Date.now()}.png`;
+                a.click();
+                URL.revokeObjectURL(url);
+            });
+        }
+
+        function downloadSVG() {
+            const width = window.innerWidth;
+            const height = window.innerHeight;
+
+            // Create SVG header
+            let svg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}">
+<rect width="100%" height="100%" fill="${currentParams.backgroundColor}"/>
+<g id="mesh">
+`;
+
+            // Helper to project 3D point to 2D screen coordinates
+            function project3DTo2D(point) {
+                const vector = point.clone();
+                vector.project(camera);
+                const x = (vector.x + 1) / 2 * width;
+                const y = (-vector.y + 1) / 2 * height;
+                return { x, y, z: vector.z };
+            }
+
+            // Collect all lines from the mesh group
+            const lines = [];
+            meshGroup.traverse((child) => {
+                if (child.isLine) {
+                    const positions = child.geometry.attributes.position;
+                    const points = [];
+                    for (let i = 0; i < positions.count; i++) {
+                        const point = new THREE.Vector3(
+                            positions.getX(i),
+                            positions.getY(i),
+                            positions.getZ(i)
+                        );
+                        point.applyMatrix4(child.matrixWorld);
+                        points.push(point);
+                    }
+
+                    const color = child.material.color.getStyle();
+                    const opacity = child.material.opacity !== undefined ? child.material.opacity : 1.0;
+                    const lineWidth = child.material.linewidth || 1;
+
+                    lines.push({ points, color, opacity, lineWidth });
+                }
+            });
+
+            // Render lines to SVG
+            lines.forEach(({ points, color, opacity, lineWidth }) => {
+                if (points.length < 2) return;
+
+                const projected = points.map(p => project3DTo2D(p));
+
+                // Build SVG path
+                let pathData = `M ${projected[0].x.toFixed(2)} ${projected[0].y.toFixed(2)}`;
+                for (let i = 1; i < projected.length; i++) {
+                    pathData += ` L ${projected[i].x.toFixed(2)} ${projected[i].y.toFixed(2)}`;
+                }
+
+                svg += `<path d="${pathData}" fill="none" stroke="${color}" stroke-width="${lineWidth}" stroke-opacity="${opacity}" stroke-linecap="round" stroke-linejoin="round"/>\n`;
+            });
+
+            svg += `</g>\n</svg>`;
+
+            // Download SVG
+            const blob = new Blob([svg], { type: 'image/svg+xml' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `snail_pyramid_${Date.now()}.svg`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function copyJSON() {
+            const json = JSON.stringify(currentParams, null, 2);
+            navigator.clipboard.writeText(json);
+            console.log('Preset copied to clipboard:', json);
+        }
+
+        function saveJSON() {
+            const json = JSON.stringify(currentParams, null, 2);
+            const blob = new Blob([json], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `snail_pyramid_preset_${Date.now()}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function loadJSON() {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.json';
+            input.onchange = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    try {
+                        const loaded = JSON.parse(event.target.result);
+                        Object.assign(currentParams, loaded);
+                        updateMesh(currentParams);
+
+                        // Update GUI to reflect new values
+                        gui.updateDisplay();
+
+                        // Update camera if projection changed
+                        camera = currentParams.projection === 'Orthographic' ? orthoCamera : perspCamera;
+                        orbitControls.object = camera;
+
+                        // Update background and grid
+                        scene.background = new THREE.Color(currentParams.backgroundColor);
+                        gridHelper.visible = currentParams.showGrid;
+
+                        console.log('Preset loaded successfully');
+                    } catch (error) {
+                        console.error('Error loading preset:', error);
+                        alert('Error loading preset file');
+                    }
+                };
+                reader.readAsText(file);
+            };
+            input.click();
+        }
+
+        // ===== ANIMATION LOOP =====
+        function animate() {
+            requestAnimationFrame(animate);
+            orbitControls.update();
+            renderer.render(scene, camera);
+        }
+
+        animate();
+
+        // Handle resize
+        window.addEventListener('resize', () => {
+            const aspect = window.innerWidth / window.innerHeight;
+
+            orthoCamera.left = -orthoSize * aspect;
+            orthoCamera.right = orthoSize * aspect;
+            orthoCamera.updateProjectionMatrix();
+
+            perspCamera.aspect = aspect;
+            perspCamera.updateProjectionMatrix();
+
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
