@@ -826,6 +826,9 @@
             const width = window.innerWidth;
             const height = window.innerHeight;
 
+            // Render current frame to ensure camera and scene are synced
+            renderer.render(scene, camera);
+
             // Update camera and scene matrices to match current view
             camera.updateMatrixWorld();
             camera.updateProjectionMatrix();
