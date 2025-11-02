@@ -826,6 +826,11 @@
             const width = window.innerWidth;
             const height = window.innerHeight;
 
+            // Update camera and scene matrices to match current view
+            camera.updateMatrixWorld();
+            camera.updateProjectionMatrix();
+            meshGroup.updateMatrixWorld(true);
+
             // Create SVG header
             let svg = `<?xml version="1.0" encoding="UTF-8"?>
 <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}">
