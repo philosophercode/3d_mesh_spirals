@@ -842,7 +842,10 @@
                 return { x, y, z: vector.z };
             }
 
-            // First, render occluding meshes as filled shapes (to hide lines behind them)
+            // Collect all elements (triangles and line segments) with depth for sorting
+            const elements = [];
+
+            // Collect occluding triangles
             meshGroup.traverse((child) => {
                 if (child.isMesh && child.material.colorWrite === false) {
                     const geometry = child.geometry;
@@ -873,14 +876,19 @@
                             const p2 = project3DTo2D(v2);
                             const p3 = project3DTo2D(v3);
 
-                            // Render as filled polygon with background color
-                            svg += `<polygon points="${p1.x.toFixed(2)},${p1.y.toFixed(2)} ${p2.x.toFixed(2)},${p2.y.toFixed(2)} ${p3.x.toFixed(2)},${p3.y.toFixed(2)}" fill="${currentParams.backgroundColor}"/>\n`;
+                            const avgZ = (p1.z + p2.z + p3.z) / 3;
+
+                            elements.push({
+                                type: 'triangle',
+                                depth: avgZ,
+                                p1, p2, p3
+                            });
                         }
                     }
                 }
             });
 
-            // Then render all lines on top
+            // Collect line segments
             meshGroup.traverse((child) => {
                 if (child.isLine) {
                     const positions = child.geometry.attributes.position;
@@ -899,17 +907,31 @@
                     const opacity = child.material.opacity !== undefined ? child.material.opacity : 1.0;
                     const lineWidth = child.material.linewidth || 1;
 
-                    if (points.length < 2) return;
+                    // Break into segments
+                    for (let i = 0; i < points.length - 1; i++) {
+                        const p1 = project3DTo2D(points[i]);
+                        const p2 = project3DTo2D(points[i + 1]);
+                        const avgZ = (p1.z + p2.z) / 2;
 
-                    const projected = points.map(p => project3DTo2D(p));
-
-                    // Build SVG path
-                    let pathData = `M ${projected[0].x.toFixed(2)} ${projected[0].y.toFixed(2)}`;
-                    for (let i = 1; i < projected.length; i++) {
-                        pathData += ` L ${projected[i].x.toFixed(2)} ${projected[i].y.toFixed(2)}`;
+                        elements.push({
+                            type: 'line',
+                            depth: avgZ,
+                            p1, p2,
+                            color, opacity, lineWidth
+                        });
                     }
+                }
+            });
 
-                    svg += `<path d="${pathData}" fill="none" stroke="${color}" stroke-width="${lineWidth}" stroke-opacity="${opacity}" stroke-linecap="round" stroke-linejoin="round"/>\n`;
+            // Sort by depth (back to front - lower z values first)
+            elements.sort((a, b) => a.depth - b.depth);
+
+            // Render all elements in sorted order
+            elements.forEach(element => {
+                if (element.type === 'triangle') {
+                    svg += `<polygon points="${element.p1.x.toFixed(2)},${element.p1.y.toFixed(2)} ${element.p2.x.toFixed(2)},${element.p2.y.toFixed(2)} ${element.p3.x.toFixed(2)},${element.p3.y.toFixed(2)}" fill="${currentParams.backgroundColor}"/>\n`;
+                } else if (element.type === 'line') {
+                    svg += `<line x1="${element.p1.x.toFixed(2)}" y1="${element.p1.y.toFixed(2)}" x2="${element.p2.x.toFixed(2)}" y2="${element.p2.y.toFixed(2)}" stroke="${element.color}" stroke-width="${element.lineWidth}" stroke-opacity="${element.opacity}" stroke-linecap="round"/>\n`;
                 }
             });
 
