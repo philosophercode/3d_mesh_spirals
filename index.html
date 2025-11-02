@@ -826,6 +826,9 @@
             const width = window.innerWidth;
             const height = window.innerHeight;
 
+            // Update orbit controls to sync camera position
+            orbitControls.update();
+
             // Render current frame to ensure camera and scene are synced
             renderer.render(scene, camera);
 
