@@ -849,8 +849,8 @@
                 const vector = point.clone();
                 vector.project(camera);
                 const x = (vector.x + 1) / 2 * width;
-                const y = (vector.y - 1) / -2 * height;
-                return { x, y, z: vector.z };
+                const y = (-vector.y + 1) / 2 * height;
+                return { x, y, z: -vector.z };
             }
 
             // Collect all elements (triangles and line segments) with depth for sorting
