@@ -842,8 +842,8 @@
                 return { x, y, z: vector.z };
             }
 
-            // Collect all lines from the mesh group
-            const lines = [];
+            // Collect all line segments from the mesh group
+            const segments = [];
             meshGroup.traverse((child) => {
                 if (child.isLine) {
                     const positions = child.geometry.attributes.position;
@@ -862,23 +862,113 @@
                     const opacity = child.material.opacity !== undefined ? child.material.opacity : 1.0;
                     const lineWidth = child.material.linewidth || 1;
 
-                    lines.push({ points, color, opacity, lineWidth });
+                    // Break line into individual segments for depth sorting
+                    for (let i = 0; i < points.length - 1; i++) {
+                        const p1 = points[i];
+                        const p2 = points[i + 1];
+                        const midZ = (p1.clone().project(camera).z + p2.clone().project(camera).z) / 2;
+                        segments.push({ p1, p2, color, opacity, lineWidth, depth: midZ });
+                    }
                 }
             });
 
-            // Render lines to SVG
-            lines.forEach(({ points, color, opacity, lineWidth }) => {
-                if (points.length < 2) return;
+            // Sort segments by depth (back to front)
+            segments.sort((a, b) => a.depth - b.depth);
 
-                const projected = points.map(p => project3DTo2D(p));
+            // Collect occluding meshes for depth testing
+            const occluders = [];
+            meshGroup.traverse((child) => {
+                if (child.isMesh && child.material.colorWrite === false) {
+                    // This is an occlusion mesh
+                    const geometry = child.geometry;
+                    const index = geometry.index;
+                    const positions = geometry.attributes.position;
 
-                // Build SVG path
-                let pathData = `M ${projected[0].x.toFixed(2)} ${projected[0].y.toFixed(2)}`;
-                for (let i = 1; i < projected.length; i++) {
-                    pathData += ` L ${projected[i].x.toFixed(2)} ${projected[i].y.toFixed(2)}`;
+                    if (index) {
+                        for (let i = 0; i < index.count; i += 3) {
+                            const v1 = new THREE.Vector3(
+                                positions.getX(index.getX(i)),
+                                positions.getY(index.getX(i)),
+                                positions.getZ(index.getX(i))
+                            ).applyMatrix4(child.matrixWorld);
+
+                            const v2 = new THREE.Vector3(
+                                positions.getX(index.getX(i + 1)),
+                                positions.getY(index.getX(i + 1)),
+                                positions.getZ(index.getX(i + 1))
+                            ).applyMatrix4(child.matrixWorld);
+
+                            const v3 = new THREE.Vector3(
+                                positions.getX(index.getX(i + 2)),
+                                positions.getY(index.getX(i + 2)),
+                                positions.getZ(index.getX(i + 2))
+                            ).applyMatrix4(child.matrixWorld);
+
+                            occluders.push([v1, v2, v3]);
+                        }
+                    }
+                }
+            });
+
+            // Helper to check if a line segment is occluded by triangles
+            function isSegmentOccluded(p1, p2, occluders) {
+                const proj1 = project3DTo2D(p1);
+                const proj2 = project3DTo2D(p2);
+
+                // Sample points along the segment
+                const samples = 5;
+                for (let i = 0; i <= samples; i++) {
+                    const t = i / samples;
+                    const samplePoint = {
+                        x: proj1.x + t * (proj2.x - proj1.x),
+                        y: proj1.y + t * (proj2.y - proj1.y),
+                        z: proj1.z + t * (proj2.z - proj1.z)
+                    };
+
+                    // Check if this sample point is inside any occluding triangle
+                    for (const [v1, v2, v3] of occluders) {
+                        const pv1 = project3DTo2D(v1);
+                        const pv2 = project3DTo2D(v2);
+                        const pv3 = project3DTo2D(v3);
+
+                        // Check if sample point is inside triangle using barycentric coordinates
+                        function sign(p1, p2, p3) {
+                            return (p1.x - p3.x) * (p2.y - p3.y) - (p2.x - p3.x) * (p1.y - p3.y);
+                        }
+
+                        const d1 = sign(samplePoint, pv1, pv2);
+                        const d2 = sign(samplePoint, pv2, pv3);
+                        const d3 = sign(samplePoint, pv3, pv1);
+
+                        const hasNeg = (d1 < 0) || (d2 < 0) || (d3 < 0);
+                        const hasPos = (d1 > 0) || (d2 > 0) || (d3 > 0);
+
+                        const isInside = !(hasNeg && hasPos);
+
+                        if (isInside) {
+                            // Point is inside triangle, check if triangle is in front
+                            const triZ = (pv1.z + pv2.z + pv3.z) / 3;
+                            if (triZ > samplePoint.z + 0.001) { // Triangle is in front (with small epsilon)
+                                return true;
+                            }
+                        }
+                    }
                 }
 
-                svg += `<path d="${pathData}" fill="none" stroke="${color}" stroke-width="${lineWidth}" stroke-opacity="${opacity}" stroke-linecap="round" stroke-linejoin="round"/>\n`;
+                return false;
+            }
+
+            // Render visible segments to SVG
+            segments.forEach(({ p1, p2, color, opacity, lineWidth }) => {
+                // Check if segment is occluded
+                if (occluders.length > 0 && isSegmentOccluded(p1, p2, occluders)) {
+                    return; // Skip occluded segments
+                }
+
+                const proj1 = project3DTo2D(p1);
+                const proj2 = project3DTo2D(p2);
+
+                svg += `<line x1="${proj1.x.toFixed(2)}" y1="${proj1.y.toFixed(2)}" x2="${proj2.x.toFixed(2)}" y2="${proj2.y.toFixed(2)}" stroke="${color}" stroke-width="${lineWidth}" stroke-opacity="${opacity}" stroke-linecap="round"/>\n`;
             });
 
             svg += `</g>\n</svg>`;
