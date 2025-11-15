@@ -1,0 +1,21 @@
+{
+  "name": "3d-mesh-spirals",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "lil-gui": "^0.21.0",
+    "three": "^0.160.0",
+    "tweakpane": "^4.0.5"
+  },
+  "devDependencies": {
+    "@types/dat.gui": "^0.7.9",
+    "@types/three": "^0.160.0",
+    "typescript": "^5.3.3",
+    "vite": "^5.0.10"
+  }
+}
