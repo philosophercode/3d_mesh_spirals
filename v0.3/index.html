@@ -1,0 +1,2003 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Snail Pyramid Explorer</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        #canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+        }
+        
+        /* Modern UI Toggle Button */
+        #uiToggle {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            padding: 10px 16px;
+            background: rgba(255, 255, 255, 0.9);
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            z-index: 2000;
+            transition: all 0.2s;
+        }
+        #uiToggle:hover {
+            background: rgba(255, 255, 255, 1);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+        
+        /* Modern UI Panel */
+        #modernUI {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            width: 280px;
+            padding: 20px;
+            background: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            z-index: 1000;
+            display: block;
+        }
+        #modernUI.active {
+            display: block;
+        }
+        #modernUI h2 {
+            margin: 0 0 20px 0;
+            font-size: 18px;
+            font-weight: 600;
+            color: #333;
+        }
+        .control-group {
+            margin-bottom: 20px;
+        }
+        .control-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            color: #333;
+        }
+        .control-group input[type="range"] {
+            width: 100%;
+            height: 6px;
+            border-radius: 3px;
+            background: #e0e0e0;
+            outline: none;
+            -webkit-appearance: none;
+            appearance: none;
+        }
+        .control-group input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #000;
+            cursor: pointer;
+        }
+        .control-group input[type="range"]::-moz-range-thumb {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #000;
+            cursor: pointer;
+            border: none;
+        }
+        .control-group input[type="color"] {
+            width: 100%;
+            height: 40px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        #modernUI button {
+            width: 100%;
+            padding: 12px;
+            margin-top: 10px;
+            background: #000;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+        #modernUI button:hover {
+            opacity: 0.9;
+        }
+        #modernUI button:disabled {
+            opacity: 0.6;
+            cursor: wait;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+    
+    <!-- UI Toggle Button -->
+    <button id="uiToggle">Switch to Classic UI</button>
+    
+    <!-- Modern UI Panel -->
+    <div id="modernUI" class="active">
+        <h2>Controls</h2>
+        
+        <div class="control-group">
+            <label>Shape</label>
+            <input type="range" id="shapeSlider" min="0" max="1" step="0.01" value="0.5">
+        </div>
+        
+        <div class="control-group">
+            <label>Turn Tightness</label>
+            <input type="range" id="tightnessSlider" min="0" max="1" step="0.01" value="0.5">
+        </div>
+
+        <div class="control-group">
+            <label>Turns</label>
+            <input type="range" id="turnsSlider" min="0" max="1" step="0.01" value="0.5">
+        </div>
+        
+        <div class="control-group">
+            <label>Decay</label>
+            <input type="range" id="decaySlider" min="0" max="1" step="0.01" value="0.5">
+        </div>
+        
+        <div class="control-group">
+            <label>Complexity</label>
+            <input type="range" id="complexitySlider" min="0" max="1" step="0.01" value="0.5">
+        </div>
+        
+        <div class="control-group">
+            <label>Twist</label>
+            <input type="range" id="twistSlider" min="0" max="1" step="0.01" value="0.5">
+        </div>
+        
+        <div class="control-group">
+            <label>Background</label>
+            <input type="color" id="bgColorPicker" value="#ffffff">
+        </div>
+        
+        <button id="exportSVGBtn">Export SVG</button>
+        <button id="traceSVGBtn">Trace PNG to SVG</button>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/dat.gui@0.7.9/build/dat.gui.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/imagetracerjs@1.2.1/imagetracer_v1.2.1.min.js"></script>
+    <script async src="https://unpkg.com/es-module-shims@1.6.3/dist/es-module-shims.js"></script>
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // ===== SETUP =====
+        const canvas = document.getElementById('canvas');
+        const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+        const scene = new THREE.Scene();
+
+        // Setup both cameras
+        const aspect = window.innerWidth / window.innerHeight;
+        const orthoSize = 3;
+        const orthoCamera = new THREE.OrthographicCamera(
+            -orthoSize * aspect, orthoSize * aspect, orthoSize, -orthoSize, 0.1, 1000
+        );
+        const perspCamera = new THREE.PerspectiveCamera(50, aspect, 0.1, 1000);
+
+        let camera = orthoCamera;
+        orthoCamera.position.set(5, 4, 5);
+        perspCamera.position.set(5, 4, 5);
+
+        const orbitControls = new OrbitControls(camera, canvas);
+        orbitControls.enableDamping = true;
+        orbitControls.dampingFactor = 0.05;
+
+        const tempBox = new THREE.Box3();
+        const tempVec = new THREE.Vector3();
+
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(5, 10, 7);
+        scene.add(dirLight);
+
+        // Grid helper
+        const gridHelper = new THREE.GridHelper(10, 10, 0x444444, 0x222222);
+        scene.add(gridHelper);
+
+        // ===== GEOMETRY BUILDER =====
+        let meshGroup = new THREE.Group();
+        scene.add(meshGroup);
+
+        function computeRadiusAtU(u, params) {
+            let r;
+            if (params.mode === 'Exponential') {
+                r = params.r0 * Math.exp(-params.k * u);
+            } else {
+                r = params.r0 - params.alpha * u;
+            }
+            return Math.max(r, params.rMin);
+        }
+
+        function buildGeometry(params) {
+            const vertices = [];
+            const indices = [];
+            const uMax = 2 * Math.PI * params.N;
+
+            // Generate vertices for outer surface
+            for (let i = 0; i <= params.uDiv; i++) {
+                const u = uMax * i / params.uDiv;
+                const rTube = computeRadiusAtU(u, params);
+
+                for (let j = 0; j <= params.vDiv; j++) {
+                    const vBase = 2 * Math.PI * j / params.vDiv;
+                    const v = vBase + params.twist * (u / (2 * Math.PI));
+
+                    const rt = rTube * (1 + params.epsilon * Math.cos(v));
+                    const x = (params.R + rt * Math.cos(v)) * Math.cos(u);
+                    const y = (params.R + rt * Math.cos(v)) * Math.sin(u);
+                    const z = rt * Math.sin(v) + params.h * (u / (2 * Math.PI));
+
+                    vertices.push(x, y, z);
+                }
+            }
+
+            // Generate indices for outer surface triangles
+            for (let i = 0; i < params.uDiv; i++) {
+                for (let j = 0; j < params.vDiv; j++) {
+                    const a = i * (params.vDiv + 1) + j;
+                    const b = (i + 1) * (params.vDiv + 1) + j;
+                    const c = (i + 1) * (params.vDiv + 1) + (j + 1);
+                    const d = i * (params.vDiv + 1) + (j + 1);
+
+                    indices.push(a, b, d);
+                    indices.push(b, c, d);
+                }
+            }
+
+            const geometry = new THREE.BufferGeometry();
+            geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+            geometry.setIndex(indices);
+            geometry.computeVertexNormals();
+
+            return geometry;
+        }
+
+        // Build thick wall geometry (outer + inner + caps)
+        function buildThickWallGeometry(params) {
+            const vertices = [];
+            const indices = [];
+            const uMax = 2 * Math.PI * params.N;
+            const numOuterVerts = (params.uDiv + 1) * (params.vDiv + 1);
+
+            // Generate vertices for OUTER surface
+            for (let i = 0; i <= params.uDiv; i++) {
+                const u = uMax * i / params.uDiv;
+                const rTube = computeRadiusAtU(u, params);
+
+                for (let j = 0; j <= params.vDiv; j++) {
+                    const vBase = 2 * Math.PI * j / params.vDiv;
+                    const v = vBase + params.twist * (u / (2 * Math.PI));
+
+                    const rt = rTube * (1 + params.epsilon * Math.cos(v));
+                    const x = (params.R + rt * Math.cos(v)) * Math.cos(u);
+                    const y = (params.R + rt * Math.cos(v)) * Math.sin(u);
+                    const z = rt * Math.sin(v) + params.h * (u / (2 * Math.PI));
+
+                    vertices.push(x, y, z);
+                }
+            }
+
+            // Generate vertices for INNER surface
+            for (let i = 0; i <= params.uDiv; i++) {
+                const u = uMax * i / params.uDiv;
+                const rTube = computeRadiusAtU(u, params);
+                const rTubeInner = rTube - params.wallThickness;
+
+                for (let j = 0; j <= params.vDiv; j++) {
+                    const vBase = 2 * Math.PI * j / params.vDiv;
+                    const v = vBase + params.twist * (u / (2 * Math.PI));
+
+                    const rt = rTubeInner * (1 + params.epsilon * Math.cos(v));
+                    const x = (params.R + rt * Math.cos(v)) * Math.cos(u);
+                    const y = (params.R + rt * Math.cos(v)) * Math.sin(u);
+                    const z = rt * Math.sin(v) + params.h * (u / (2 * Math.PI));
+
+                    vertices.push(x, y, z);
+                }
+            }
+
+            // Outer surface triangles
+            for (let i = 0; i < params.uDiv; i++) {
+                for (let j = 0; j < params.vDiv; j++) {
+                    const a = i * (params.vDiv + 1) + j;
+                    const b = (i + 1) * (params.vDiv + 1) + j;
+                    const c = (i + 1) * (params.vDiv + 1) + (j + 1);
+                    const d = i * (params.vDiv + 1) + (j + 1);
+
+                    indices.push(a, b, d);
+                    indices.push(b, c, d);
+                }
+            }
+
+            // Inner surface triangles (reversed winding)
+            for (let i = 0; i < params.uDiv; i++) {
+                for (let j = 0; j < params.vDiv; j++) {
+                    const a = numOuterVerts + i * (params.vDiv + 1) + j;
+                    const b = numOuterVerts + (i + 1) * (params.vDiv + 1) + j;
+                    const c = numOuterVerts + (i + 1) * (params.vDiv + 1) + (j + 1);
+                    const d = numOuterVerts + i * (params.vDiv + 1) + (j + 1);
+
+                    indices.push(a, d, b);
+                    indices.push(b, d, c);
+                }
+            }
+
+            // Cap at start (u=0)
+            for (let j = 0; j < params.vDiv; j++) {
+                const outerA = j;
+                const outerB = j + 1;
+                const innerA = numOuterVerts + j;
+                const innerB = numOuterVerts + j + 1;
+
+                indices.push(outerA, innerA, outerB);
+                indices.push(outerB, innerA, innerB);
+            }
+
+            // Cap at end (u=uMax)
+            const lastRing = params.uDiv * (params.vDiv + 1);
+            for (let j = 0; j < params.vDiv; j++) {
+                const outerA = lastRing + j;
+                const outerB = lastRing + j + 1;
+                const innerA = numOuterVerts + lastRing + j;
+                const innerB = numOuterVerts + lastRing + j + 1;
+
+                indices.push(outerA, outerB, innerA);
+                indices.push(outerB, innerB, innerA);
+            }
+
+            const geometry = new THREE.BufferGeometry();
+            geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+            geometry.setIndex(indices);
+            geometry.computeVertexNormals();
+
+            return geometry;
+        }
+
+        function buildWireframeLines(params) {
+            const uMax = 2 * Math.PI * params.N;
+
+            // Helper to compute position with optional inner surface offset
+            function getPosition(u, v, isInner = false) {
+                const rTube = computeRadiusAtU(u, params);
+                const vTwisted = v + params.twist * (u / (2 * Math.PI));
+
+                // Apply wall thickness for inner surface
+                const effectiveRTube = isInner ? rTube - params.wallThickness : rTube;
+                const rt = effectiveRTube * (1 + params.epsilon * Math.cos(vTwisted));
+
+                const x = (params.R + rt * Math.cos(vTwisted)) * Math.cos(u);
+                const y = (params.R + rt * Math.cos(vTwisted)) * Math.sin(u);
+                const z = rt * Math.sin(vTwisted) + params.h * (u / (2 * Math.PI));
+                return new THREE.Vector3(x, y, z);
+            }
+
+            // Build lines for a surface (outer or inner)
+            function buildSurfaceLines(isInner, color) {
+                const surfaceLines = [];
+
+                // Meridians (constant v, varying u) - show many more lines for Denes look
+                if (params.showMeridians) {
+                    const vStep = Math.max(1, Math.floor(params.vDiv / 48)); // doubled density
+                    for (let j = 0; j < params.vDiv; j += vStep) {
+                        const points = [];
+                        const v = 2 * Math.PI * j / params.vDiv;
+                        for (let i = 0; i <= params.uDiv; i++) {
+                            const u = uMax * i / params.uDiv;
+                            points.push(getPosition(u, v, isInner));
+                        }
+                        const geometry = new THREE.BufferGeometry().setFromPoints(points);
+                        const line = new THREE.Line(geometry, new THREE.LineBasicMaterial({
+                            color: color,
+                            linewidth: params.lineWidth,
+                            transparent: isInner,
+                            opacity: isInner ? 0.7 : 1.0
+                        }));
+                        surfaceLines.push(line);
+                    }
+                }
+
+                // Parallels (constant u, varying v) - show many more lines for Denes look
+                if (params.showParallels) {
+                    const uStep = Math.max(1, Math.floor(params.uDiv / 80)); // much denser
+                    for (let i = 0; i <= params.uDiv; i += uStep) {
+                        const points = [];
+                        const u = uMax * i / params.uDiv;
+                        for (let j = 0; j <= params.vDiv; j++) {
+                            const v = 2 * Math.PI * j / params.vDiv;
+                            points.push(getPosition(u, v, isInner));
+                        }
+                        const geometry = new THREE.BufferGeometry().setFromPoints(points);
+                        const line = new THREE.Line(geometry, new THREE.LineBasicMaterial({
+                            color: color,
+                            linewidth: params.lineWidth,
+                            transparent: isInner,
+                            opacity: isInner ? 0.7 : 1.0
+                        }));
+                        surfaceLines.push(line);
+                    }
+                }
+
+                return surfaceLines;
+            }
+
+            // Build outer surface
+            const outerColor = new THREE.Color(params.outerColor);
+            const outerLines = buildSurfaceLines(false, outerColor);
+
+            // Build inner surface if enabled
+            const innerLines = params.showInnerSurface ? buildSurfaceLines(true, new THREE.Color(params.innerColor)) : [];
+
+            // Build wall depth lines at caps (start and end)
+            const depthLines = [];
+            if (params.showInnerSurface) {
+                // Start cap (u=0) - outer edge
+                const startOuterPoints = [];
+                for (let j = 0; j <= params.vDiv; j++) {
+                    const v = 2 * Math.PI * j / params.vDiv;
+                    startOuterPoints.push(getPosition(0, v, false));
+                }
+                const startOuterGeom = new THREE.BufferGeometry().setFromPoints(startOuterPoints);
+                const startOuterLine = new THREE.Line(startOuterGeom, new THREE.LineBasicMaterial({
+                    color: outerColor,
+                    linewidth: params.lineWidth
+                }));
+                depthLines.push(startOuterLine);
+
+                // Start cap (u=0) - inner edge
+                const startInnerPoints = [];
+                for (let j = 0; j <= params.vDiv; j++) {
+                    const v = 2 * Math.PI * j / params.vDiv;
+                    startInnerPoints.push(getPosition(0, v, true));
+                }
+                const startInnerGeom = new THREE.BufferGeometry().setFromPoints(startInnerPoints);
+                const startInnerLine = new THREE.Line(startInnerGeom, new THREE.LineBasicMaterial({
+                    color: new THREE.Color(params.innerColor),
+                    linewidth: params.lineWidth,
+                    transparent: true,
+                    opacity: 0.7
+                }));
+                depthLines.push(startInnerLine);
+
+                // End cap (u=uMax) - outer edge
+                const endOuterPoints = [];
+                for (let j = 0; j <= params.vDiv; j++) {
+                    const v = 2 * Math.PI * j / params.vDiv;
+                    endOuterPoints.push(getPosition(uMax, v, false));
+                }
+                const endOuterGeom = new THREE.BufferGeometry().setFromPoints(endOuterPoints);
+                const endOuterLine = new THREE.Line(endOuterGeom, new THREE.LineBasicMaterial({
+                    color: outerColor,
+                    linewidth: params.lineWidth
+                }));
+                depthLines.push(endOuterLine);
+
+                // End cap (u=uMax) - inner edge
+                const endInnerPoints = [];
+                for (let j = 0; j <= params.vDiv; j++) {
+                    const v = 2 * Math.PI * j / params.vDiv;
+                    endInnerPoints.push(getPosition(uMax, v, true));
+                }
+                const endInnerGeom = new THREE.BufferGeometry().setFromPoints(endInnerPoints);
+                const endInnerLine = new THREE.Line(endInnerGeom, new THREE.LineBasicMaterial({
+                    color: new THREE.Color(params.innerColor),
+                    linewidth: params.lineWidth,
+                    transparent: true,
+                    opacity: 0.7
+                }));
+                depthLines.push(endInnerLine);
+            }
+
+            return { outerLines, innerLines, depthLines };
+        }
+
+        // Build cross-section wall at a specific u position
+        function buildCrossSectionWall(params, u) {
+            const rTube = computeRadiusAtU(u, params);
+
+            const vertices = [];
+            const indices = [];
+
+            // Generate vertices for the cross-section ring (outer and inner edges)
+            for (let j = 0; j <= params.vDiv; j++) {
+                const vBase = 2 * Math.PI * j / params.vDiv;
+                const v = vBase + params.twist * (u / (2 * Math.PI));
+
+                // Outer edge vertex
+                const rtOuter = rTube * (1 + params.epsilon * Math.cos(v));
+                const xOuter = (params.R + rtOuter * Math.cos(v)) * Math.cos(u);
+                const yOuter = (params.R + rtOuter * Math.cos(v)) * Math.sin(u);
+                const zOuter = rtOuter * Math.sin(v) + params.h * (u / (2 * Math.PI));
+                vertices.push(xOuter, yOuter, zOuter);
+
+                // Inner edge vertex
+                const rTubeInner = rTube - params.wallThickness;
+                const rtInner = rTubeInner * (1 + params.epsilon * Math.cos(v));
+                const xInner = (params.R + rtInner * Math.cos(v)) * Math.cos(u);
+                const yInner = (params.R + rtInner * Math.cos(v)) * Math.sin(u);
+                const zInner = rtInner * Math.sin(v) + params.h * (u / (2 * Math.PI));
+                vertices.push(xInner, yInner, zInner);
+            }
+
+            // Generate triangles for the cross-section wall
+            for (let j = 0; j < params.vDiv; j++) {
+                const outerA = j * 2;
+                const innerA = j * 2 + 1;
+                const outerB = (j + 1) * 2;
+                const innerB = (j + 1) * 2 + 1;
+
+                // Create quad as two triangles
+                indices.push(outerA, outerB, innerA);
+                indices.push(outerB, innerB, innerA);
+            }
+
+            const geometry = new THREE.BufferGeometry();
+            geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+            geometry.setIndex(indices);
+            geometry.computeVertexNormals();
+
+            return geometry;
+        }
+
+        // Build wireframe outline for cross-section wall with dense grid
+        function buildCrossSectionWireframe(params, u) {
+            const rTube = computeRadiusAtU(u, params);
+
+            const outerPoints = [];
+            const innerPoints = [];
+
+            for (let j = 0; j <= params.vDiv; j++) {
+                const vBase = 2 * Math.PI * j / params.vDiv;
+                const v = vBase + params.twist * (u / (2 * Math.PI));
+
+                // Outer edge
+                const rtOuter = rTube * (1 + params.epsilon * Math.cos(v));
+                const xOuter = (params.R + rtOuter * Math.cos(v)) * Math.cos(u);
+                const yOuter = (params.R + rtOuter * Math.cos(v)) * Math.sin(u);
+                const zOuter = rtOuter * Math.sin(v) + params.h * (u / (2 * Math.PI));
+                outerPoints.push(new THREE.Vector3(xOuter, yOuter, zOuter));
+
+                // Inner edge
+                const rTubeInner = rTube - params.wallThickness;
+                const rtInner = rTubeInner * (1 + params.epsilon * Math.cos(v));
+                const xInner = (params.R + rtInner * Math.cos(v)) * Math.cos(u);
+                const yInner = (params.R + rtInner * Math.cos(v)) * Math.sin(u);
+                const zInner = rtInner * Math.sin(v) + params.h * (u / (2 * Math.PI));
+                innerPoints.push(new THREE.Vector3(xInner, yInner, zInner));
+            }
+
+            const lines = [];
+
+            // Outer edge line (thicker)
+            const outerGeom = new THREE.BufferGeometry().setFromPoints(outerPoints);
+            const outerLine = new THREE.Line(outerGeom, new THREE.LineBasicMaterial({
+                color: new THREE.Color(params.crossSectionColor),
+                linewidth: params.lineWidth * 2
+            }));
+            lines.push(outerLine);
+
+            // Inner edge line (thicker)
+            const innerGeom = new THREE.BufferGeometry().setFromPoints(innerPoints);
+            const innerLine = new THREE.Line(innerGeom, new THREE.LineBasicMaterial({
+                color: new THREE.Color(params.crossSectionColor),
+                linewidth: params.lineWidth * 2
+            }));
+            lines.push(innerLine);
+
+            // Dense radial spokes connecting outer to inner
+            const spokeStep = Math.max(1, Math.floor(params.vDiv / params.crossSectionSpokes));
+            for (let j = 0; j < params.vDiv; j += spokeStep) {
+                const spokePoints = [outerPoints[j], innerPoints[j]];
+                const spokeGeom = new THREE.BufferGeometry().setFromPoints(spokePoints);
+                const spokeLine = new THREE.Line(spokeGeom, new THREE.LineBasicMaterial({
+                    color: new THREE.Color(params.crossSectionColor),
+                    linewidth: params.lineWidth
+                }));
+                lines.push(spokeLine);
+            }
+
+            // Concentric circles at different radii
+            for (let c = 1; c <= params.crossSectionCircles; c++) {
+                const t = c / (params.crossSectionCircles + 1);
+                const circlePoints = [];
+
+                for (let j = 0; j <= params.vDiv; j++) {
+                    const vBase = 2 * Math.PI * j / params.vDiv;
+                    const v = vBase + params.twist * (u / (2 * Math.PI));
+
+                    // Interpolate between inner and outer
+                    const rTubeInner = rTube - params.wallThickness;
+                    const rtOuter = rTube * (1 + params.epsilon * Math.cos(v));
+                    const rtInner = rTubeInner * (1 + params.epsilon * Math.cos(v));
+                    const rt = rtInner + t * (rtOuter - rtInner);
+
+                    const x = (params.R + rt * Math.cos(v)) * Math.cos(u);
+                    const y = (params.R + rt * Math.cos(v)) * Math.sin(u);
+                    const z = rt * Math.sin(v) + params.h * (u / (2 * Math.PI));
+                    circlePoints.push(new THREE.Vector3(x, y, z));
+                }
+
+                const circleGeom = new THREE.BufferGeometry().setFromPoints(circlePoints);
+                const circleLine = new THREE.Line(circleGeom, new THREE.LineBasicMaterial({
+                    color: new THREE.Color(params.crossSectionColor),
+                    linewidth: params.lineWidth,
+                    transparent: true,
+                    opacity: 0.6
+                }));
+                lines.push(circleLine);
+            }
+
+            return lines;
+        }
+
+        function updateMesh(params) {
+            // Clear existing mesh
+            meshGroup.clear();
+
+            if (params.renderStyle === 'Solid') {
+                const geometry = buildGeometry(params);
+                const material = new THREE.MeshStandardMaterial({
+                    color: 0x6699cc,
+                    side: THREE.DoubleSide,
+                    metalness: 0.3,
+                    roughness: 0.6
+                });
+                const mesh = new THREE.Mesh(geometry, material);
+                meshGroup.add(mesh);
+            } else if (params.renderStyle === 'Wireframe') {
+                const { outerLines, innerLines, depthLines } = buildWireframeLines(params);
+
+                // If occlusion is enabled, use thick wall geometry for proper depth
+                if (params.occludeInner) {
+                    // Use thick wall geometry including inner surface, outer surface, and caps
+                    const thickGeometry = buildThickWallGeometry(params);
+                    const depthMaterial = new THREE.MeshBasicMaterial({
+                        colorWrite: false,
+                        side: THREE.FrontSide  // Only render front faces for occlusion
+                    });
+                    const depthMesh = new THREE.Mesh(thickGeometry, depthMaterial);
+                    meshGroup.add(depthMesh);
+
+                    // Render lines with depth testing
+                    [...outerLines, ...innerLines, ...depthLines].forEach(line => {
+                        line.material.depthTest = true;
+                        line.material.depthWrite = false;
+                        line.renderOrder = 1;
+                        meshGroup.add(line);
+                    });
+                } else {
+                    // No occlusion - render lines normally
+                    outerLines.forEach(line => meshGroup.add(line));
+                    innerLines.forEach(line => meshGroup.add(line));
+                    depthLines.forEach(line => meshGroup.add(line));
+                }
+            } else if (params.renderStyle === 'Hidden-line') {
+                // Hidden-line always uses thick wall geometry for proper occlusion
+                const thickGeometry = buildThickWallGeometry(params);
+                const depthMaterial = new THREE.MeshBasicMaterial({
+                    colorWrite: false,
+                    side: THREE.FrontSide  // Only render front faces for occlusion
+                });
+                const depthMesh = new THREE.Mesh(thickGeometry, depthMaterial);
+                meshGroup.add(depthMesh);
+
+                // Wireframe on top with depth testing
+                const { outerLines, innerLines, depthLines } = buildWireframeLines(params);
+                [...outerLines, ...innerLines, ...depthLines].forEach(line => {
+                    line.material.depthTest = true;
+                    line.material.depthWrite = false;
+                    line.renderOrder = 1;
+                    meshGroup.add(line);
+                });
+            }
+
+            // Add cross-section walls at both ends - ALWAYS add for proper occlusion
+            const uMax = 2 * Math.PI * params.N;
+            const uPositions = [0, uMax]; // Start and end
+
+            uPositions.forEach(u => {
+                if (params.renderStyle === 'Solid') {
+                    // Render solid cross-section
+                    const csGeometry = buildCrossSectionWall(params, u);
+                    const csMaterial = new THREE.MeshStandardMaterial({
+                        color: params.showCrossSection ? params.crossSectionColor : params.outerColor,
+                        side: THREE.DoubleSide,
+                        metalness: 0.5,
+                        roughness: 0.4
+                    });
+                    const csMesh = new THREE.Mesh(csGeometry, csMaterial);
+                    meshGroup.add(csMesh);
+                } else {
+                    // ALWAYS render invisible depth mesh for cross-section to occlude lines behind it
+                    const csGeometry = buildCrossSectionWall(params, u);
+                    const csDepthMaterial = new THREE.MeshBasicMaterial({
+                        colorWrite: false,
+                        side: THREE.DoubleSide
+                    });
+                    const csDepthMesh = new THREE.Mesh(csGeometry, csDepthMaterial);
+                    meshGroup.add(csDepthMesh);
+
+                    // Only render wireframe cross-section on top if showCrossSection is enabled
+                    if (params.showCrossSection) {
+                        const csLines = buildCrossSectionWireframe(params, u);
+                        csLines.forEach(line => {
+                            line.material.depthTest = true;
+                            line.material.depthWrite = false;
+                            line.renderOrder = 2; // Render on top
+                            meshGroup.add(line);
+                        });
+                    }
+                }
+            });
+        }
+
+        // ===== PARAMETERS & UI =====
+        // Default to Denes Original preset
+        const defaultParams = {
+            // Geometry
+            N: 2.75,
+            R: 1.65,
+            r0: 0.55,
+            mode: 'Exponential',
+            k: 0.18,
+            alpha: 0.1,
+            rMin: 0.015,
+            h: 0.0,
+            epsilon: 0.08,
+            twist: 0.0,
+            wallThickness: 0.10,
+
+            // Mesh density - much higher for Denes look
+            uDiv: 320,
+            vDiv: 96,
+
+            // Rendering
+            projection: 'Orthographic',
+            renderStyle: 'Wireframe',
+            showMeridians: true,
+            showParallels: true,
+            showInnerSurface: true,
+            occludeInner: true,
+            lineWidth: 1,
+            outerColor: '#333333',
+            innerColor: '#555555',
+            backgroundColor: '#ffffff',  // Changed to white
+            showGrid: false,
+
+            // Cross-section - enabled by default
+            showCrossSection: true,
+            crossSectionColor: '#000000',  // Black
+            crossSectionSpokes: 24,
+            crossSectionCircles: 3
+        };
+
+        let currentParams = { ...defaultParams };
+
+        // Initialize
+        scene.background = new THREE.Color(currentParams.backgroundColor);
+        gridHelper.visible = currentParams.showGrid;
+        updateMesh(currentParams);
+
+        // Setup dat.GUI controls
+        const gui = new dat.GUI({ width: 320 });
+        gui.domElement.style.display = 'none'; // Hide dat.GUI by default
+        let useModernUI = true;
+
+        // Geometry folder
+        const geoFolder = gui.addFolder('Geometry');
+        geoFolder.add(currentParams, 'N', 0.5, 6, 0.1).name('Turns').onChange(() => updateMesh(currentParams));
+        geoFolder.add(currentParams, 'R', 0.1, 5, 0.05).name('Major radius').onChange(() => updateMesh(currentParams));
+        geoFolder.add(currentParams, 'r0', 0.02, 1.5, 0.01).name('Start tube radius').onChange(() => updateMesh(currentParams));
+        geoFolder.open();
+
+        // Decay folder
+        const decayFolder = gui.addFolder('Decay');
+        decayFolder.add(currentParams, 'mode', ['Exponential', 'Linear']).name('Decay type').onChange(() => updateMesh(currentParams));
+        decayFolder.add(currentParams, 'k', 0, 0.6, 0.01).name('Exponential rate').onChange(() => updateMesh(currentParams));
+        decayFolder.add(currentParams, 'alpha', 0, 0.2, 0.01).name('Linear rate').onChange(() => updateMesh(currentParams));
+        decayFolder.add(currentParams, 'rMin', 0, 0.3, 0.005).name('Min tube radius').onChange(() => updateMesh(currentParams));
+        decayFolder.open();
+
+        // Shape folder
+        const shapeFolder = gui.addFolder('Shape');
+        shapeFolder.add(currentParams, 'h', -2, 2, 0.1).name('Axial rise').onChange(() => updateMesh(currentParams));
+        shapeFolder.add(currentParams, 'epsilon', 0, 0.5, 0.01).name('Eccentricity').onChange(() => updateMesh(currentParams));
+        shapeFolder.add(currentParams, 'twist', -2 * Math.PI, 2 * Math.PI, 0.1).name('Cross-section twist').onChange(() => updateMesh(currentParams));
+        shapeFolder.add(currentParams, 'wallThickness', 0, 0.3, 0.01).name('Wall thickness').onChange(() => updateMesh(currentParams));
+        shapeFolder.open();
+
+        // Mesh folder
+        const meshFolder = gui.addFolder('Mesh');
+        meshFolder.add(currentParams, 'uDiv', 16, 480, 8).name('U divisions').onChange(() => updateMesh(currentParams));
+        meshFolder.add(currentParams, 'vDiv', 16, 160, 4).name('V divisions').onChange(() => updateMesh(currentParams));
+        meshFolder.open();
+
+        // Rendering folder
+        const renderFolder = gui.addFolder('Rendering');
+        renderFolder.add(currentParams, 'projection', ['Orthographic', 'Perspective']).name('Projection').onChange((value) => {
+            camera = value === 'Orthographic' ? orthoCamera : perspCamera;
+            orbitControls.object = camera;
+            camera.position.copy(orbitControls.target).add(new THREE.Vector3(5, 4, 5));
+            orbitControls.update();
+        });
+        renderFolder.add(currentParams, 'renderStyle', ['Wireframe', 'Hidden-line', 'Solid']).name('Render style').onChange(() => updateMesh(currentParams));
+        renderFolder.add(currentParams, 'showMeridians').name('Show meridians').onChange(() => updateMesh(currentParams));
+        renderFolder.add(currentParams, 'showParallels').name('Show parallels').onChange(() => updateMesh(currentParams));
+        renderFolder.add(currentParams, 'showInnerSurface').name('Show inner surface').onChange(() => updateMesh(currentParams));
+        renderFolder.add(currentParams, 'occludeInner').name('Occlude inner mesh').onChange(() => updateMesh(currentParams));
+        renderFolder.add(currentParams, 'lineWidth', 1, 3, 0.5).name('Line width').onChange(() => updateMesh(currentParams));
+        renderFolder.addColor(currentParams, 'outerColor').name('Outer color').onChange(() => updateMesh(currentParams));
+        renderFolder.addColor(currentParams, 'innerColor').name('Inner color').onChange(() => updateMesh(currentParams));
+        renderFolder.addColor(currentParams, 'backgroundColor').name('Background').onChange((value) => {
+            scene.background = new THREE.Color(value);
+        });
+        renderFolder.add(currentParams, 'showGrid').name('Show grid').onChange((value) => {
+            gridHelper.visible = value;
+        });
+        renderFolder.open();
+
+        // Cross-section folder
+        const crossSectionFolder = gui.addFolder('Cross-Section');
+        crossSectionFolder.add(currentParams, 'showCrossSection').name('Show cross-section').onChange(() => updateMesh(currentParams));
+        crossSectionFolder.add(currentParams, 'crossSectionSpokes', 4, 48, 1).name('Radial spokes').onChange(() => updateMesh(currentParams));
+        crossSectionFolder.add(currentParams, 'crossSectionCircles', 0, 8, 1).name('Concentric circles').onChange(() => updateMesh(currentParams));
+        crossSectionFolder.addColor(currentParams, 'crossSectionColor').name('Color').onChange(() => updateMesh(currentParams));
+        crossSectionFolder.open();
+
+        // Presets folder
+        const presetsFolder = gui.addFolder('Presets');
+        presetsFolder.add({ preset: () => applyPreset('denesOriginal') }, 'preset').name('Denes Original');
+        presetsFolder.add({ preset: () => applyPreset('denes') }, 'preset').name('Denes-like');
+        presetsFolder.add({ preset: () => applyPreset('snail') }, 'preset').name('Snail tight');
+        presetsFolder.add({ preset: () => applyPreset('wide') }, 'preset').name('Wide torus');
+        presetsFolder.add({ preset: () => applyPreset('flat') }, 'preset').name('Flat coil');
+
+        // Export folder
+        const exportFolder = gui.addFolder('Export');
+        exportFolder.add({ export: downloadPNG }, 'export').name('Download PNG');
+        exportFolder.add({ export: downloadSVG }, 'export').name('Download SVG');
+        exportFolder.add({ export: downloadTracedSVG }, 'export').name('Trace PNG to SVG');
+        exportFolder.add({ export: copyJSON }, 'export').name('Copy JSON');
+        exportFolder.add({ export: saveJSON }, 'export').name('Save preset to file');
+        exportFolder.add({ export: loadJSON }, 'export').name('Load preset from file');
+
+        function applyPreset(preset) {
+            const presets = {
+                denesOriginal: {
+                    // Exact match for the Denes drawing - high density mesh
+                    N: 2.75, R: 1.65, r0: 0.55, mode: 'Exponential', k: 0.18, rMin: 0.015,
+                    h: 0.0, epsilon: 0.08, twist: 0.0, wallThickness: 0.10,
+                    uDiv: 320, vDiv: 96,
+                    projection: 'Orthographic', renderStyle: 'Wireframe',
+                    showMeridians: true, showParallels: true, showInnerSurface: true, occludeInner: true,
+                    lineWidth: 1,
+                    outerColor: '#333333', innerColor: '#555555',
+                    backgroundColor: '#ffffff', showGrid: false,
+                    showCrossSection: true, crossSectionColor: '#000000', crossSectionSpokes: 24, crossSectionCircles: 3
+                },
+                denes: {
+                    N: 2.75, R: 1.65, r0: 0.55, mode: 'Exponential', k: 0.18, rMin: 0.015,
+                    h: 0.0, epsilon: 0.08, twist: 0.0, wallThickness: 0.08,
+                    uDiv: 240, vDiv: 72,
+                    projection: 'Orthographic', renderStyle: 'Wireframe',
+                    showMeridians: true, showParallels: true, showInnerSurface: true, occludeInner: false,
+                    lineWidth: 1,
+                    outerColor: '#3388ff', innerColor: '#ff8833',
+                    backgroundColor: '#1a1a1a', showGrid: true,
+                    showCrossSection: false, crossSectionColor: '#ff3333', crossSectionSpokes: 24, crossSectionCircles: 3
+                },
+                snail: {
+                    N: 4.0, R: 1.2, r0: 0.8, mode: 'Exponential', k: 0.25, rMin: 0.01,
+                    h: 0.5, epsilon: 0.15, twist: 0.3, wallThickness: 0.10,
+                    uDiv: 280, vDiv: 64,
+                    projection: 'Perspective', renderStyle: 'Hidden-line',
+                    showMeridians: true, showParallels: true, showInnerSurface: true, occludeInner: true,
+                    lineWidth: 1,
+                    outerColor: '#4444ff', innerColor: '#8888ff',
+                    backgroundColor: '#0a0a0a', showGrid: false,
+                    showCrossSection: false, crossSectionColor: '#ff3333', crossSectionSpokes: 24, crossSectionCircles: 3
+                },
+                wide: {
+                    N: 1.5, R: 2.5, r0: 0.4, mode: 'Linear', alpha: 0.05, rMin: 0.05,
+                    h: 0.0, epsilon: 0.0, twist: 0.0, wallThickness: 0.05,
+                    uDiv: 200, vDiv: 80,
+                    projection: 'Orthographic', renderStyle: 'Solid',
+                    showMeridians: true, showParallels: false, showInnerSurface: false, occludeInner: false,
+                    lineWidth: 1,
+                    outerColor: '#6699cc', innerColor: '#99ccff',
+                    backgroundColor: '#1a1a1a', showGrid: true,
+                    showCrossSection: false, crossSectionColor: '#ff3333', crossSectionSpokes: 24, crossSectionCircles: 3
+                },
+                flat: {
+                    N: 5.0, R: 2.0, r0: 0.3, mode: 'Exponential', k: 0.12, rMin: 0.02,
+                    h: -0.2, epsilon: 0.0, twist: 0.0, wallThickness: 0.04,
+                    uDiv: 320, vDiv: 64,
+                    projection: 'Orthographic', renderStyle: 'Wireframe',
+                    showMeridians: true, showParallels: true, showInnerSurface: true, occludeInner: true,
+                    lineWidth: 1,
+                    outerColor: '#ff6644', innerColor: '#ffaa88',
+                    backgroundColor: '#1a1a1a', showGrid: true,
+                    showCrossSection: false, crossSectionColor: '#ff3333', crossSectionSpokes: 24, crossSectionCircles: 3
+                }
+            };
+
+            if (presets[preset]) {
+                Object.assign(currentParams, presets[preset]);
+                updateMesh(currentParams);
+
+                // Update GUI to reflect new values
+                gui.updateDisplay();
+
+                // Update camera if projection changed
+                camera = currentParams.projection === 'Orthographic' ? orthoCamera : perspCamera;
+                orbitControls.object = camera;
+
+                // Update background and grid
+                scene.background = new THREE.Color(currentParams.backgroundColor);
+                gridHelper.visible = currentParams.showGrid;
+            }
+        }
+
+        function downloadPNG() {
+            renderer.render(scene, camera);
+            const crop = getSquareCropSpace('pixel');
+            const exportCanvas = document.createElement('canvas');
+            exportCanvas.width = crop.size;
+            exportCanvas.height = crop.size;
+            const exportCtx = exportCanvas.getContext('2d');
+            exportCtx.drawImage(
+                renderer.domElement,
+                crop.x,
+                crop.y,
+                crop.size,
+                crop.size,
+                0,
+                0,
+                exportCanvas.width,
+                exportCanvas.height
+            );
+            exportCanvas.toBlob((blob) => {
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `snail_pyramid_${Date.now()}.png`;
+                a.click();
+                URL.revokeObjectURL(url);
+            });
+        }
+
+        function getRendererDimensions(space = 'pixel') {
+            const pixelRatio = renderer.getPixelRatio ? renderer.getPixelRatio() : window.devicePixelRatio || 1;
+            const cssWidth = renderer.domElement.clientWidth || window.innerWidth;
+            const cssHeight = renderer.domElement.clientHeight || window.innerHeight;
+            if (space === 'pixel') {
+                return {
+                    width: renderer.domElement.width,
+                    height: renderer.domElement.height,
+                    pixelRatio
+                };
+            }
+            return { width: cssWidth, height: cssHeight, pixelRatio };
+        }
+
+        function getSquareCropSpace(space = 'pixel', padding = 0.06) {
+            const { width, height, pixelRatio } = getRendererDimensions(space);
+            tempBox.setFromObject(meshGroup);
+            if (!tempBox || !isFinite(tempBox.min.x)) {
+                const size = Math.min(width, height);
+                return {
+                    x: Math.max(0, (width - size) / 2),
+                    y: Math.max(0, (height - size) / 2),
+                    size,
+                    width,
+                    height,
+                    pixelRatio
+                };
+            }
+
+            const corners = [
+                new THREE.Vector3(tempBox.min.x, tempBox.min.y, tempBox.min.z),
+                new THREE.Vector3(tempBox.min.x, tempBox.min.y, tempBox.max.z),
+                new THREE.Vector3(tempBox.min.x, tempBox.max.y, tempBox.min.z),
+                new THREE.Vector3(tempBox.min.x, tempBox.max.y, tempBox.max.z),
+                new THREE.Vector3(tempBox.max.x, tempBox.min.y, tempBox.min.z),
+                new THREE.Vector3(tempBox.max.x, tempBox.min.y, tempBox.max.z),
+                new THREE.Vector3(tempBox.max.x, tempBox.max.y, tempBox.min.z),
+                new THREE.Vector3(tempBox.max.x, tempBox.max.y, tempBox.max.z)
+            ];
+
+            let minX = Infinity;
+            let minY = Infinity;
+            let maxX = -Infinity;
+            let maxY = -Infinity;
+
+            corners.forEach((corner) => {
+                tempVec.copy(corner).project(camera);
+                const x = (tempVec.x + 1) / 2 * width;
+                const y = (-tempVec.y + 1) / 2 * height;
+                if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+                minX = Math.min(minX, x);
+                minY = Math.min(minY, y);
+                maxX = Math.max(maxX, x);
+                maxY = Math.max(maxY, y);
+            });
+
+            if (!Number.isFinite(minX) || !Number.isFinite(minY)) {
+                const size = Math.min(width, height);
+                return {
+                    x: Math.max(0, (width - size) / 2),
+                    y: Math.max(0, (height - size) / 2),
+                    size,
+                    width,
+                    height,
+                    pixelRatio
+                };
+            }
+
+            const rectWidth = Math.max(1, maxX - minX);
+            const rectHeight = Math.max(1, maxY - minY);
+            const padPx = Math.max(rectWidth, rectHeight) * padding;
+
+            minX = Math.max(0, minX - padPx);
+            minY = Math.max(0, minY - padPx);
+            maxX = Math.min(width, maxX + padPx);
+            maxY = Math.min(height, maxY + padPx);
+
+            let squareSize = Math.max(rectWidth, rectHeight) + padPx * 2;
+            squareSize = Math.min(squareSize, width, height);
+
+            const centerX = (minX + maxX) / 2;
+            const centerY = (minY + maxY) / 2;
+
+            let startX = centerX - squareSize / 2;
+            let startY = centerY - squareSize / 2;
+
+            startX = Math.min(Math.max(0, startX), width - squareSize);
+            startY = Math.min(Math.max(0, startY), height - squareSize);
+
+            return {
+                x: Math.round(startX),
+                y: Math.round(startY),
+                size: Math.round(squareSize),
+                width,
+                height,
+                pixelRatio
+            };
+        }
+
+        function downloadSVG() {
+            console.time('SVG Generation');
+            const renderWidth = window.innerWidth;
+            const renderHeight = window.innerHeight;
+            const svgCrop = getSquareCropSpace('css');
+            const svgSize = Math.round(svgCrop.size);
+
+            // Update orbit controls to sync camera position
+            orbitControls.update();
+
+            // Render current frame to ensure camera and scene are synced
+            renderer.render(scene, camera);
+
+            // Update camera and scene matrices to match current view
+            camera.updateMatrixWorld();
+            camera.updateProjectionMatrix();
+            meshGroup.updateMatrixWorld(true);
+
+            // Render scene with only occluding meshes to get depth information
+            // Use a depth-to-color shader to encode depth in RGB
+            const depthRenderTarget = new THREE.WebGLRenderTarget(renderWidth, renderHeight);
+            
+            // Create a scene with only occluding meshes, using depth-to-color material
+            const depthScene = new THREE.Scene();
+            const depthMaterial = new THREE.ShaderMaterial({
+                vertexShader: `
+                    varying float vDepth;
+                    void main() {
+                        vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+                        vec4 clipPosition = projectionMatrix * mvPosition;
+                        // Use NDC Z (same as what project3DTo2D uses)
+                        vDepth = (clipPosition.z / clipPosition.w + 1.0) / 2.0; // Normalize to [0, 1]
+                        gl_Position = clipPosition;
+                    }
+                `,
+                fragmentShader: `
+                    varying float vDepth;
+                    void main() {
+                        // Store depth in R channel (8-bit precision, normalized to [0, 1])
+                        float depth = clamp(vDepth, 0.0, 1.0);
+                        gl_FragColor = vec4(depth, 0.0, 0.0, 1.0);
+                    }
+                `
+            });
+            
+            let hasOccludingMeshes = false;
+            meshGroup.traverse((child) => {
+                if (child.isMesh && child.material.colorWrite === false) {
+                    hasOccludingMeshes = true;
+                    const depthMesh = child.clone();
+                    depthMesh.material = depthMaterial;
+                    depthScene.add(depthMesh);
+                }
+            });
+            
+            let depthImageData = null;
+            if (hasOccludingMeshes) {
+                // Render depth scene to color buffer
+                const oldRenderTarget = renderer.getRenderTarget();
+                renderer.setRenderTarget(depthRenderTarget);
+                renderer.render(depthScene, camera);
+                renderer.setRenderTarget(oldRenderTarget);
+                
+                // Read depth from color buffer
+                depthImageData = new Uint8Array(renderWidth * renderHeight * 4);
+                renderer.readRenderTargetPixels(depthRenderTarget, 0, 0, renderWidth, renderHeight, depthImageData);
+            }
+            
+            // Helper to get depth from buffer (depth is encoded in R channel as normalized value)
+            function getDepthAt(x, y) {
+                if (!depthImageData) return 1.0; // No occlusion, return far plane
+                const px = Math.floor(Math.max(0, Math.min(renderWidth - 1, x)));
+                const py = Math.floor(Math.max(0, Math.min(renderHeight - 1, renderHeight - 1 - y))); // Flip Y
+                const idx = (py * renderWidth + px) * 4;
+                // Depth is stored in R channel, normalized to [0, 1]
+                const depth = depthImageData[idx] / 255.0;
+                return depth > 0 ? depth : 1.0; // If no depth data, assume far plane
+            }
+            
+            // Helper to project 3D point to 2D screen coordinates and get depth
+            function project3DTo2D(point) {
+                const vector = point.clone();
+                vector.project(camera);
+                const x = (vector.x + 1) / 2 * renderWidth;
+                const y = (-vector.y + 1) / 2 * renderHeight;
+                // Get depth in normalized device coordinates (NDC)
+                const ndcZ = vector.z; // This is in [-1, 1] range
+                // Convert to depth buffer value (0 = near, 1 = far)
+                const depth = (ndcZ + 1) / 2;
+                return { x, y, z: depth };
+            }
+            
+            // Helper to check if a point is visible (not occluded)
+            function isPointVisible(projected, tolerance = 0.01) {
+                if (!hasOccludingMeshes) return true; // No occlusion, all points visible
+                const bufferDepth = getDepthAt(projected.x, projected.y);
+                // Point is visible if it's closer (smaller z) than what's in the depth buffer
+                // Add tolerance to account for precision issues
+                return projected.z < bufferDepth + tolerance;
+            }
+
+            // Create SVG header
+            let svg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg width="${svgSize}" height="${svgSize}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${svgSize} ${svgSize}">
+<rect width="100%" height="100%" fill="${currentParams.backgroundColor}"/>
+<g id="mesh">
+`;
+
+            // Collect only visible line segments by checking against depth buffer
+            const visibleLines = [];
+            let totalLines = 0;
+            let occludedLines = 0;
+            
+            meshGroup.traverse((child) => {
+                if (child.isLine) {
+                    const positions = child.geometry.attributes.position;
+                    const points = [];
+                    for (let i = 0; i < positions.count; i++) {
+                        const point = new THREE.Vector3(
+                            positions.getX(i),
+                            positions.getY(i),
+                            positions.getZ(i)
+                        );
+                        point.applyMatrix4(child.matrixWorld);
+                        points.push(point);
+                    }
+
+                    const color = child.material.color.getStyle();
+                    const opacity = child.material.opacity !== undefined ? child.material.opacity : 1.0;
+                    const lineWidth = child.material.linewidth || 1;
+
+                    // Break into segments and check visibility
+                    for (let i = 0; i < points.length - 1; i++) {
+                        totalLines++;
+                        const p1 = project3DTo2D(points[i]);
+                        const p2 = project3DTo2D(points[i + 1]);
+                        
+                        // Check visibility - if no occlusion meshes, all lines are visible
+                        // Otherwise, check if any part of the line is visible
+                        let isVisible = false;
+                        if (!hasOccludingMeshes) {
+                            isVisible = true;
+                        } else {
+                            // Check endpoints first (most important)
+                            if (isPointVisible(p1) || isPointVisible(p2)) {
+                                isVisible = true;
+                            } else {
+                                // Sample a few points along the line
+                                const samples = 3;
+                                for (let s = 1; s < samples; s++) {
+                                    const t = s / samples;
+                                    const px = p1.x + (p2.x - p1.x) * t;
+                                    const py = p1.y + (p2.y - p1.y) * t;
+                                    const pz = p1.z + (p2.z - p1.z) * t;
+                                    
+                                    if (isPointVisible({ x: px, y: py, z: pz })) {
+                                        isVisible = true;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                        
+                        if (isVisible) {
+                            visibleLines.push({
+                                p1, p2,
+                                color, opacity, lineWidth,
+                                depth: (p1.z + p2.z) / 2
+                            });
+                        } else {
+                            occludedLines++;
+                        }
+                    }
+                }
+            });
+            
+            // Sort visible lines by depth (back to front)
+            visibleLines.sort((a, b) => a.depth - b.depth);
+            
+            console.log(`Line visibility: ${visibleLines.length} visible, ${occludedLines} occluded out of ${totalLines} total`);
+            console.log(`Has occluding meshes: ${hasOccludingMeshes}`);
+            if (hasOccludingMeshes && depthImageData) {
+                // Sample a few depth values to verify depth buffer is populated
+                let sampleDepths = [];
+                for (let i = 0; i < 10; i++) {
+                    const x = Math.floor(Math.random() * renderWidth);
+                    const y = Math.floor(Math.random() * renderHeight);
+                    sampleDepths.push(getDepthAt(x, y).toFixed(3));
+                }
+                console.log(`Sample depth values: ${sampleDepths.join(', ')}`);
+            }
+
+            // Render only visible lines
+            console.log('Generating SVG markup...');
+            const precision = 1; // Reduced precision for smaller file size
+
+            function shiftPoint(point) {
+                return {
+                    x: (point.x - svgCrop.x).toFixed(precision),
+                    y: (point.y - svgCrop.y).toFixed(precision)
+                };
+            }
+            
+            // Group consecutive lines by color/style to create paths
+            let currentPath = null;
+            let pathSegments = [];
+            
+            visibleLines.forEach(line => {
+                // Check if we can continue the current path
+                const sameStyle = currentPath && 
+                    currentPath.color === line.color && 
+                    currentPath.opacity === line.opacity && 
+                    currentPath.lineWidth === line.lineWidth;
+                
+                if (!sameStyle) {
+                    // Flush previous path
+                    if (currentPath) {
+                        svg += `<path d="${pathSegments.join(' ')}" stroke="${currentPath.color}" stroke-width="${currentPath.lineWidth}" stroke-opacity="${currentPath.opacity}" fill="none" stroke-linecap="round"/>\n`;
+                    }
+                    // Start new path
+                    currentPath = {
+                        color: line.color,
+                        opacity: line.opacity,
+                        lineWidth: line.lineWidth
+                    };
+                    const p1 = shiftPoint(line.p1);
+                    const p2 = shiftPoint(line.p2);
+                    pathSegments = [`M${p1.x},${p1.y}`, `L${p2.x},${p2.y}`];
+                } else {
+                    // Continue current path
+                    const p1 = shiftPoint(line.p1);
+                    const p2 = shiftPoint(line.p2);
+                    pathSegments.push(`M${p1.x},${p1.y}`, `L${p2.x},${p2.y}`);
+                }
+            });
+            
+            // Flush any remaining path
+            if (currentPath) {
+                svg += `<path d="${pathSegments.join(' ')}" stroke="${currentPath.color}" stroke-width="${currentPath.lineWidth}" stroke-opacity="${currentPath.opacity}" fill="none" stroke-linecap="round"/>\n`;
+            }
+
+            svg += `</g>\n<!-- Stats: ${visibleLines.length} visible lines; Crop: ${svgCrop.size}px square -->\n</svg>`;
+
+            console.timeEnd('SVG Generation');
+            console.log(`SVG size: ${(svg.length / 1024).toFixed(2)} KB`);
+
+            // Download SVG
+            const blob = new Blob([svg], { type: 'image/svg+xml' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `snail_pyramid_${Date.now()}.svg`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function getHighContrastImageData() {
+            renderer.render(scene, camera);
+
+            const crop = getSquareCropSpace('pixel');
+            const sourceWidth = crop.size;
+            const sourceHeight = crop.size;
+            const longestSide = crop.size;
+            const deviceRatio = window.devicePixelRatio || 1;
+
+            const MAX_TRACE_DIMENSION = 6144;
+            const MIN_TRACE_DIMENSION = 2048;
+            let supersample = Math.min(3, Math.max(1.35, deviceRatio * 1.5));
+
+            let scaledLongSide = longestSide * supersample;
+            if (scaledLongSide > MAX_TRACE_DIMENSION) {
+                supersample = MAX_TRACE_DIMENSION / longestSide;
+                scaledLongSide = longestSide * supersample;
+            } else if (scaledLongSide < MIN_TRACE_DIMENSION && longestSide < MIN_TRACE_DIMENSION) {
+                supersample = Math.min(MAX_TRACE_DIMENSION / longestSide, MIN_TRACE_DIMENSION / longestSide);
+                scaledLongSide = longestSide * supersample;
+            }
+
+            const width = Math.max(1, Math.round(sourceWidth * supersample));
+            const height = Math.max(1, Math.round(sourceHeight * supersample));
+
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = width;
+            tempCanvas.height = height;
+            const ctx = tempCanvas.getContext('2d', { willReadFrequently: true });
+            ctx.imageSmoothingEnabled = supersample > 1;
+            ctx.imageSmoothingQuality = 'high';
+            ctx.drawImage(
+                renderer.domElement,
+                crop.x,
+                crop.y,
+                crop.size,
+                crop.size,
+                0,
+                0,
+                width,
+                height
+            );
+
+            const imageData = ctx.getImageData(0, 0, width, height);
+            const enhanced = enhanceRasterForTracing(imageData);
+
+            return {
+                imageData: enhanced,
+                meta: {
+                    sourceWidth,
+                    sourceHeight,
+                    targetWidth: width,
+                    targetHeight: height,
+                    scale: supersample,
+                    crop
+                }
+            };
+        }
+
+        function enhanceRasterForTracing(imageData) {
+            const { data, width, height } = imageData;
+            const pixelCount = width * height;
+            const grayscale = new Float32Array(pixelCount);
+
+            let luminanceSum = 0;
+            let minLum = 255;
+            let maxLum = 0;
+
+            for (let i = 0, p = 0; i < data.length; i += 4, p++) {
+                const lum = 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2];
+                grayscale[p] = lum;
+                luminanceSum += lum;
+                if (lum < minLum) minLum = lum;
+                if (lum > maxLum) maxLum = lum;
+            }
+
+            const avgLum = luminanceSum / pixelCount;
+            const invert = avgLum < 128;
+            const normRange = Math.max(1, maxLum - minLum);
+
+            for (let i = 0; i < pixelCount; i++) {
+                let normalized = (grayscale[i] - minLum) / normRange;
+                normalized = Math.max(0, Math.min(1, Math.pow(normalized, invert ? 1.12 : 0.88)));
+                grayscale[i] = (invert ? 1 - normalized : normalized) * 255;
+            }
+
+            applyMultiScaleBlur(grayscale, width, height);
+
+            const edgeResponse = computeEdgeResponse(grayscale, width, height);
+            const binaryMask = adaptiveThreshold(grayscale, edgeResponse, width, height);
+            writeBinaryMaskToImageData(binaryMask, data);
+
+            return imageData;
+        }
+
+        function applyMultiScaleBlur(buffer, width, height) {
+            applySeparableBlur(buffer, width, height, [1, 4, 6, 4, 1], 16);
+            applySeparableBlur(buffer, width, height, [1, 2, 1], 4);
+        }
+
+        function applySeparableBlur(buffer, width, height, kernel, norm) {
+            const radius = Math.floor(kernel.length / 2);
+            const temp = new Float32Array(buffer.length);
+
+            for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                    let sum = 0;
+                    for (let k = -radius; k <= radius; k++) {
+                        const sampleX = Math.min(width - 1, Math.max(0, x + k));
+                        sum += buffer[y * width + sampleX] * kernel[k + radius];
+                    }
+                    temp[y * width + x] = sum / norm;
+                }
+            }
+
+            for (let x = 0; x < width; x++) {
+                for (let y = 0; y < height; y++) {
+                    let sum = 0;
+                    for (let k = -radius; k <= radius; k++) {
+                        const sampleY = Math.min(height - 1, Math.max(0, y + k));
+                        sum += temp[sampleY * width + x] * kernel[k + radius];
+                    }
+                    buffer[y * width + x] = sum / norm;
+                }
+            }
+        }
+
+        function computeEdgeResponse(grayscale, width, height) {
+            const response = new Float32Array(grayscale.length);
+            let maxEdgeValue = 0;
+
+            for (let y = 1; y < height - 1; y++) {
+                for (let x = 1; x < width - 1; x++) {
+                    const idx = y * width + x;
+                    const topLeft = grayscale[idx - width - 1];
+                    const top = grayscale[idx - width];
+                    const topRight = grayscale[idx - width + 1];
+                    const left = grayscale[idx - 1];
+                    const right = grayscale[idx + 1];
+                    const bottomLeft = grayscale[idx + width - 1];
+                    const bottom = grayscale[idx + width];
+                    const bottomRight = grayscale[idx + width + 1];
+
+                    const gx = -topLeft - 2 * left - bottomLeft + topRight + 2 * right + bottomRight;
+                    const gy = -topLeft - 2 * top - topRight + bottomLeft + 2 * bottom + bottomRight;
+                    const magnitude = Math.sqrt(gx * gx + gy * gy);
+                    response[idx] = magnitude;
+                    if (magnitude > maxEdgeValue) {
+                        maxEdgeValue = magnitude;
+                    }
+                }
+            }
+
+            const scale = maxEdgeValue > 0 ? 255 / maxEdgeValue : 0;
+            for (let i = 0; i < response.length; i++) {
+                response[i] = Math.min(255, response[i] * scale);
+            }
+
+            return response;
+        }
+
+        function adaptiveThreshold(grayscale, edgeResponse, width, height) {
+            const binaryMask = new Uint8ClampedArray(grayscale.length);
+            const stride = width + 1;
+            const integral = new Float64Array((height + 1) * stride);
+
+            for (let y = 1; y <= height; y++) {
+                let rowSum = 0;
+                for (let x = 1; x <= width; x++) {
+                    rowSum += grayscale[(y - 1) * width + (x - 1)];
+                    integral[y * stride + x] = rowSum + integral[(y - 1) * stride + x];
+                }
+            }
+
+            const radius = Math.max(5, Math.floor(Math.min(width, height) * 0.012));
+            const edgeBias = 0.32;
+            const adaptiveBias = 5.5;
+
+            for (let y = 0; y < height; y++) {
+                const y1 = Math.max(0, y - radius);
+                const y2 = Math.min(height, y + radius + 1);
+                for (let x = 0; x < width; x++) {
+                    const x1 = Math.max(0, x - radius);
+                    const x2 = Math.min(width, x + radius + 1);
+                    const area = (x2 - x1) * (y2 - y1);
+                    const sum = integral[y2 * stride + x2] - integral[y1 * stride + x2] - integral[y2 * stride + x1] + integral[y1 * stride + x1];
+                    const localAvg = sum / area - adaptiveBias;
+                    const idx = y * width + x;
+                    const adjustedValue = grayscale[idx] - edgeResponse[idx] * edgeBias;
+                    binaryMask[idx] = adjustedValue < localAvg ? 0 : 255;
+                }
+            }
+
+            cleanupBinaryMask(binaryMask, width, height);
+            return binaryMask;
+        }
+
+        function cleanupBinaryMask(binaryMask, width, height) {
+            applyMorphologicalClosing(binaryMask, width, height);
+
+            const copy = binaryMask.slice();
+            for (let y = 1; y < height - 1; y++) {
+                for (let x = 1; x < width - 1; x++) {
+                    const idx = y * width + x;
+                    let darkNeighbors = 0;
+
+                    for (let ky = -1; ky <= 1; ky++) {
+                        for (let kx = -1; kx <= 1; kx++) {
+                            if (kx === 0 && ky === 0) continue;
+                            if (copy[idx + ky * width + kx] === 0) {
+                                darkNeighbors++;
+                            }
+                        }
+                    }
+
+                    if (copy[idx] === 0 && darkNeighbors <= 1) {
+                        binaryMask[idx] = 255;
+                    } else if (copy[idx] === 255 && darkNeighbors >= 6) {
+                        binaryMask[idx] = 0;
+                    }
+                }
+            }
+
+            bridgeMaskGaps(binaryMask, width, height);
+            thinMaskEdges(binaryMask, width, height);
+        }
+
+        function applyMorphologicalClosing(mask, width, height) {
+            const dilated = dilateMask(mask, width, height);
+            const eroded = erodeMask(dilated, width, height);
+            mask.set(eroded);
+        }
+
+        function dilateMask(source, width, height) {
+            const result = new Uint8ClampedArray(source.length);
+            for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                    const idx = y * width + x;
+                    let darkNeighbor = false;
+                    for (let ky = -1; ky <= 1 && !darkNeighbor; ky++) {
+                        for (let kx = -1; kx <= 1; kx++) {
+                            if (kx === 0 && ky === 0) continue;
+                            const ny = Math.min(height - 1, Math.max(0, y + ky));
+                            const nx = Math.min(width - 1, Math.max(0, x + kx));
+                            if (source[ny * width + nx] === 0) {
+                                darkNeighbor = true;
+                                break;
+                            }
+                        }
+                    }
+                    result[idx] = darkNeighbor ? 0 : 255;
+                }
+            }
+            return result;
+        }
+
+        function erodeMask(source, width, height) {
+            const result = new Uint8ClampedArray(source.length);
+            for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                    const idx = y * width + x;
+                    let fullyDark = true;
+                    for (let ky = -1; ky <= 1 && fullyDark; ky++) {
+                        for (let kx = -1; kx <= 1; kx++) {
+                            if (kx === 0 && ky === 0) continue;
+                            const ny = Math.min(height - 1, Math.max(0, y + ky));
+                            const nx = Math.min(width - 1, Math.max(0, x + kx));
+                            if (source[ny * width + nx] === 255) {
+                                fullyDark = false;
+                                break;
+                            }
+                        }
+                    }
+                    result[idx] = fullyDark && source[idx] === 0 ? 0 : 255;
+                }
+            }
+            return result;
+        }
+
+        function bridgeMaskGaps(mask, width, height) {
+            const copy = mask.slice();
+            for (let y = 1; y < height - 1; y++) {
+                for (let x = 1; x < width - 1; x++) {
+                    const idx = y * width + x;
+                    if (copy[idx] === 0) continue;
+
+                    const left = copy[idx - 1] === 0;
+                    const right = copy[idx + 1] === 0;
+                    const up = copy[idx - width] === 0;
+                    const down = copy[idx + width] === 0;
+                    const diag1 = copy[idx - width - 1] === 0 && copy[idx + width + 1] === 0;
+                    const diag2 = copy[idx - width + 1] === 0 && copy[idx + width - 1] === 0;
+
+                    if ((left && right) || (up && down) || diag1 || diag2) {
+                        mask[idx] = 0;
+                    }
+                }
+            }
+        }
+
+        function thinMaskEdges(mask, width, height) {
+            const copy = mask.slice();
+            for (let y = 1; y < height - 1; y++) {
+                for (let x = 1; x < width - 1; x++) {
+                    const idx = y * width + x;
+                    if (copy[idx] !== 0) continue;
+
+                    let lightNeighbors = 0;
+                    for (let ky = -1; ky <= 1; ky++) {
+                        for (let kx = -1; kx <= 1; kx++) {
+                            if (kx === 0 && ky === 0) continue;
+                            if (copy[idx + ky * width + kx] === 255) {
+                                lightNeighbors++;
+                            }
+                        }
+                    }
+
+                    if (lightNeighbors >= 6) {
+                        mask[idx] = 255;
+                    }
+                }
+            }
+        }
+
+        function writeBinaryMaskToImageData(mask, data) {
+            for (let i = 0, p = 0; i < data.length; i += 4, p++) {
+                const value = mask[p];
+                data[i] = data[i + 1] = data[i + 2] = value;
+                data[i + 3] = 255;
+            }
+        }
+
+        function finalizeTracedSVG(svgString, meta, isSolid) {
+            if (typeof DOMParser === 'undefined' || typeof XMLSerializer === 'undefined') {
+                return svgString;
+            }
+
+            try {
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(svgString, 'image/svg+xml');
+                const svgEl = doc.documentElement;
+                if (!svgEl) return svgString;
+
+                svgEl.setAttribute('shape-rendering', 'geometricPrecision');
+                svgEl.setAttribute('image-rendering', 'optimizeQuality');
+                svgEl.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+
+                if (meta?.targetWidth && meta?.targetHeight) {
+                    svgEl.setAttribute('viewBox', `0 0 ${meta.targetWidth} ${meta.targetHeight}`);
+                }
+
+                if (meta?.sourceWidth && meta?.sourceHeight) {
+                    svgEl.setAttribute('width', `${meta.sourceWidth}`);
+                    svgEl.setAttribute('height', `${meta.sourceHeight}`);
+                }
+
+                const svgNS = 'http://www.w3.org/2000/svg';
+                const style = doc.createElementNS(svgNS, 'style');
+                style.textContent = `
+:root{shape-rendering:geometricPrecision}
+path{vector-effect:non-scaling-stroke;stroke-linecap:${isSolid ? 'butt' : 'round'};stroke-linejoin:round}
+`;
+                svgEl.insertBefore(style, svgEl.firstChild);
+
+                const serializer = new XMLSerializer();
+                return serializer.serializeToString(doc);
+            } catch (error) {
+                console.warn('High-res SVG post-processing failed:', error);
+                return svgString;
+            }
+        }
+
+        function downloadTracedSVG() {
+            if (!window.ImageTracer) {
+                alert('Tracing library failed to load. Please refresh and try again.');
+                return;
+            }
+
+            console.time('Trace Preparation');
+            const { imageData, meta } = getHighContrastImageData();
+            console.timeEnd('Trace Preparation');
+
+            const isSolid = currentParams.renderStyle === 'Solid';
+            const scaleFactor = Math.max(1, meta?.scale || 1);
+            const baseDetail = isSolid ? 0.28 : 0.18;
+            const detailFactor = Math.max(0.06, baseDetail / scaleFactor);
+            const strokeBase = isSolid ? 0.75 : Math.max(0.6, currentParams.lineWidth * 0.8);
+            const traceOptions = {
+                pathomit: 0,
+                ltres: detailFactor,
+                qtres: detailFactor * 0.85,
+                roundcoords: scaleFactor > 1.4 ? 1 : 1.5,
+                linefilter: true,
+                colorsampling: 0,
+                numberofcolors: 2,
+                mincolorratio: 0,
+                colorquantcycles: 5,
+                blurradius: 0,
+                blurdelta: 32,
+                strokewidth: Math.max(0.4, strokeBase / scaleFactor),
+                rightangleenhance: true,
+                scale: 1,
+                desc: 'Snail pyramid high-fidelity trace',
+                palette: [
+                    { r: 0, g: 0, b: 0, a: 255 },
+                    { r: 255, g: 255, b: 255, a: 255 }
+                ]
+            };
+
+            console.time('Trace Generation');
+            const tracedSVG = window.ImageTracer.imagedataToSVG(imageData, traceOptions);
+            console.timeEnd('Trace Generation');
+
+            const finalizedSVG = finalizeTracedSVG(tracedSVG, meta, isSolid);
+
+            const blob = new Blob([finalizedSVG], { type: 'image/svg+xml' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `snail_pyramid_traced_${Date.now()}.svg`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function copyJSON() {
+            const json = JSON.stringify(currentParams, null, 2);
+            navigator.clipboard.writeText(json);
+            console.log('Preset copied to clipboard:', json);
+        }
+
+        function saveJSON() {
+            const json = JSON.stringify(currentParams, null, 2);
+            const blob = new Blob([json], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `snail_pyramid_preset_${Date.now()}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function loadJSON() {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.json';
+            input.onchange = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    try {
+                        const loaded = JSON.parse(event.target.result);
+                        Object.assign(currentParams, loaded);
+                        updateMesh(currentParams);
+
+                        // Update GUI to reflect new values
+                        gui.updateDisplay();
+
+                        // Update camera if projection changed
+                        camera = currentParams.projection === 'Orthographic' ? orthoCamera : perspCamera;
+                        orbitControls.object = camera;
+
+                        // Update background and grid
+                        scene.background = new THREE.Color(currentParams.backgroundColor);
+                        gridHelper.visible = currentParams.showGrid;
+
+                        console.log('Preset loaded successfully');
+                    } catch (error) {
+                        console.error('Error loading preset:', error);
+                        alert('Error loading preset file');
+                    }
+                };
+                reader.readAsText(file);
+            };
+            input.click();
+        }
+
+        // ===== MODERN UI SETUP =====
+        const modernUI = document.getElementById('modernUI');
+        const uiToggle = document.getElementById('uiToggle');
+        
+        // Get modern UI controls
+        const shapeSlider = document.getElementById('shapeSlider');
+        const turnsSlider = document.getElementById('turnsSlider');
+        const decaySlider = document.getElementById('decaySlider');
+        const complexitySlider = document.getElementById('complexitySlider');
+        const twistSlider = document.getElementById('twistSlider');
+        const bgColorPicker = document.getElementById('bgColorPicker');
+        const exportSVGBtn = document.getElementById('exportSVGBtn');
+        const traceSVGBtn = document.getElementById('traceSVGBtn');
+        const tightnessSlider = document.getElementById('tightnessSlider');
+
+        const R_MIN = 0.35;
+        const R_MAX = 3.5;
+        function clamp(value, min, max) {
+            return Math.min(Math.max(value, min), max);
+        }
+        
+        // Sync sliders with current params
+        function syncModernUI() {
+            // Shape: average of R and r0
+            const shapeValue = ((currentParams.R - 0.5) / 4.5 + (currentParams.r0 - 0.1) / 1.4) / 2;
+            shapeSlider.value = shapeValue;
+
+            // Turn tightness maps directly to major radius
+            const tightnessValue = clamp((currentParams.R - R_MIN) / (R_MAX - R_MIN), 0, 1);
+            tightnessSlider.value = tightnessValue;
+            
+            // Turns: N
+            turnsSlider.value = (currentParams.N - 0.5) / 5.5;
+            
+            // Decay: average of k and rMin
+            decaySlider.value = (currentParams.k / 0.6 + currentParams.rMin / 0.3) / 2;
+            
+            // Complexity: average of uDiv and vDiv
+            complexitySlider.value = ((currentParams.uDiv - 16) / 464 + (currentParams.vDiv - 16) / 144) / 2;
+            
+            // Twist: average of twist and h
+            twistSlider.value = (currentParams.twist / (4 * Math.PI) + 0.5 + (currentParams.h / 4 + 0.5)) / 2;
+            
+            // Background
+            bgColorPicker.value = currentParams.backgroundColor;
+        }
+        
+        // Modern UI event handlers
+        shapeSlider.addEventListener('input', (e) => {
+            const value = parseFloat(e.target.value);
+            currentParams.R = 0.5 + value * 4.5;
+            currentParams.r0 = 0.1 + value * 1.4;
+            updateMesh(currentParams);
+            gui.updateDisplay();
+        });
+
+        tightnessSlider.addEventListener('input', (e) => {
+            const value = parseFloat(e.target.value);
+            currentParams.R = clamp(R_MIN + value * (R_MAX - R_MIN), R_MIN, R_MAX);
+            updateMesh(currentParams);
+            gui.updateDisplay();
+        });
+        
+        turnsSlider.addEventListener('input', (e) => {
+            const value = parseFloat(e.target.value);
+            currentParams.N = 0.5 + value * 5.5;
+            updateMesh(currentParams);
+            gui.updateDisplay();
+        });
+        
+        decaySlider.addEventListener('input', (e) => {
+            const value = parseFloat(e.target.value);
+            currentParams.k = value * 0.6;
+            currentParams.rMin = value * 0.3;
+            updateMesh(currentParams);
+            gui.updateDisplay();
+        });
+        
+        complexitySlider.addEventListener('input', (e) => {
+            const value = parseFloat(e.target.value);
+            currentParams.uDiv = Math.floor((16 + value * 464) / 8) * 8;
+            currentParams.vDiv = Math.floor((16 + value * 144) / 4) * 4;
+            updateMesh(currentParams);
+            gui.updateDisplay();
+        });
+        
+        twistSlider.addEventListener('input', (e) => {
+            const value = parseFloat(e.target.value);
+            currentParams.twist = (value - 0.5) * 4 * Math.PI;
+            currentParams.h = (value - 0.5) * 4;
+            updateMesh(currentParams);
+            gui.updateDisplay();
+        });
+        
+        bgColorPicker.addEventListener('input', (e) => {
+            currentParams.backgroundColor = e.target.value;
+            scene.background = new THREE.Color(currentParams.backgroundColor);
+            gui.updateDisplay();
+        });
+        
+        exportSVGBtn.addEventListener('click', () => {
+            exportSVGBtn.disabled = true;
+            exportSVGBtn.textContent = 'Exporting...';
+            downloadSVG();
+            setTimeout(() => {
+                exportSVGBtn.disabled = false;
+                exportSVGBtn.textContent = 'Export SVG';
+            }, 1000);
+        });
+
+        traceSVGBtn.addEventListener('click', () => {
+            if (!window.ImageTracer) {
+                alert('Tracing library not ready yet. Please wait a moment and try again.');
+                return;
+            }
+            traceSVGBtn.disabled = true;
+            traceSVGBtn.textContent = 'Tracing...';
+            setTimeout(() => {
+                downloadTracedSVG();
+                traceSVGBtn.disabled = false;
+                traceSVGBtn.textContent = 'Trace PNG to SVG';
+            }, 50);
+        });
+        
+        // UI Toggle
+        uiToggle.addEventListener('click', () => {
+            useModernUI = !useModernUI;
+            
+            if (useModernUI) {
+                // Switch to modern UI
+                gui.domElement.style.display = 'none';
+                modernUI.classList.add('active');
+                uiToggle.textContent = 'Switch to Classic UI';
+                syncModernUI();
+            } else {
+                // Switch back to dat.GUI
+                gui.domElement.style.display = 'block';
+                modernUI.classList.remove('active');
+                uiToggle.textContent = 'Switch to Modern UI';
+            }
+        });
+        
+        // Initialize modern UI values
+        syncModernUI();
+
+        // ===== ANIMATION LOOP =====
+        function animate() {
+            requestAnimationFrame(animate);
+            orbitControls.update();
+            renderer.render(scene, camera);
+        }
+
+        animate();
+
+        // Handle resize
+        window.addEventListener('resize', () => {
+            const aspect = window.innerWidth / window.innerHeight;
+
+            orthoCamera.left = -orthoSize * aspect;
+            orthoCamera.right = orthoSize * aspect;
+            orthoCamera.updateProjectionMatrix();
+
+            perspCamera.aspect = aspect;
+            perspCamera.updateProjectionMatrix();
+
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
