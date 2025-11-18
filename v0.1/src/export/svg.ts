@@ -76,6 +76,7 @@ export function downloadSVG(
   // Collect occluding triangles first (like v0)
   meshGroup.traverse((child) => {
     if (child instanceof THREE.Mesh && child.material instanceof THREE.MeshBasicMaterial && child.material.colorWrite === false) {
+      console.log('Found occluding mesh with', child.geometry.index?.count || 0, 'indices');
       const geometry = child.geometry;
       const index = geometry.index;
       const positions = geometry.attributes.position;
@@ -177,6 +178,10 @@ export function downloadSVG(
 
   // Sort by depth (back to front - lower z values first)
   elements.sort((a, b) => a.depth - b.depth);
+
+  const triangleCount = elements.filter(e => e.type === 'triangle').length;
+  const lineCount = elements.filter(e => e.type === 'line').length;
+  console.log(`SVG Export: ${triangleCount} triangles, ${lineCount} line segments`);
 
   // Render all elements in sorted order
   elements.forEach(element => {
