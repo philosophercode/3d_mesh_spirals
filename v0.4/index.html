@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Snail Pyramid Explorer</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        #canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+        }
+        
+        /* Modern UI Panel */
+        #modernUI {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            width: 280px;
+            padding: 20px;
+            background: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            z-index: 1000;
+            display: block;
+        }
+        #modernUI h2 {
+            margin: 0 0 20px 0;
+            font-size: 18px;
+            font-weight: 600;
+            color: #333;
+        }
+        .control-group {
+            margin-bottom: 20px;
+        }
+        .control-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            color: #333;
+        }
+        .control-group input[type="range"] {
+            width: 100%;
+            height: 6px;
+            border-radius: 3px;
+            background: #e0e0e0;
+            outline: none;
+            -webkit-appearance: none;
+            appearance: none;
+        }
+        .control-group input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #000;
+            cursor: pointer;
+        }
+        .control-group input[type="range"]::-moz-range-thumb {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #000;
+            cursor: pointer;
+            border: none;
+        }
+        .control-group input[type="color"] {
+            width: 100%;
+            height: 40px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        #modernUI button {
+            width: 100%;
+            padding: 12px;
+            margin-top: 10px;
+            background: #000;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+        #modernUI button:hover {
+            opacity: 0.9;
+        }
+        #modernUI button:disabled {
+            opacity: 0.6;
+            cursor: wait;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+    
+    <!-- Modern UI Panel -->
+    <div id="modernUI">
+        <h2>Controls</h2>
+        
+        <div class="control-group">
+            <label>Shape</label>
+            <input type="range" id="shapeSlider" min="0" max="1" step="0.01" value="0.5">
+        </div>
+        
+        <div class="control-group">
+            <label>Turn Tightness</label>
+            <input type="range" id="tightnessSlider" min="0" max="1" step="0.01" value="0.5">
+        </div>
+
+        <div class="control-group">
+            <label>Turns</label>
+            <input type="range" id="turnsSlider" min="0" max="1" step="0.01" value="0.5">
+        </div>
+        
+        <div class="control-group">
+            <label>Decay</label>
+            <input type="range" id="decaySlider" min="0" max="1" step="0.01" value="0.5">
+        </div>
+        
+        <div class="control-group">
+            <label>Complexity</label>
+            <input type="range" id="complexitySlider" min="0" max="1" step="0.01" value="0.5">
+        </div>
+        
+        <div class="control-group">
+            <label>Twist</label>
+            <input type="range" id="twistSlider" min="0" max="1" step="0.01" value="0.5">
+        </div>
+        
+        <div class="control-group">
+            <label>Background</label>
+            <input type="color" id="bgColorPicker" value="#ffffff">
+        </div>
+        
+        <button id="exportSVGBtn">Export SVG</button>
+    </div>
+
+    <!-- Use Three.js r124 which has reliable UMD builds -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.124.0/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.124.0/examples/js/controls/OrbitControls.js"></script>
+    
+    <script src="src/params.js"></script>
+    <script src="src/geometry.js"></script>
+    <script src="src/scene.js"></script>
+    <script src="src/mesh.js"></script>
+    <script src="src/export.js"></script>
+    <script src="src/ui.js"></script>
+    <script src="src/main.js"></script>
+</body>
+</html>
