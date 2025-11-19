@@ -167,6 +167,7 @@ function downloadSVG(renderer, scene, camera, meshGroup, params, orbitControls) 
             const geometry = child.geometry;
             const index = geometry.index;
             const positions = geometry.attributes.position;
+            const isDoubleSide = child.material.side === THREE.DoubleSide;
 
             if (index) {
                 for (let i = 0; i < index.count; i += 3) {
@@ -189,6 +190,7 @@ function downloadSVG(renderer, scene, camera, meshGroup, params, orbitControls) 
                         positions.getZ(index.getX(i + 2))
                     ).applyMatrix4(child.matrixWorld);
 
+                    // Rasterize front face
                     const p1 = project3DTo2D(v1);
                     const p2 = project3DTo2D(v2);
                     const p3 = project3DTo2D(v3);
@@ -253,6 +255,70 @@ function downloadSVG(renderer, scene, camera, meshGroup, params, orbitControls) 
                                 // Note: Camera is 180 deg z-flipped, so depth ordering is reversed
                                 if (!depthBuffer.has(key) || depthBuffer.get(key) < depth) {
                                     depthBuffer.set(key, depth);
+                                }
+                            }
+                        }
+                    }
+
+                    // For DoubleSide meshes, also rasterize the back face (reversed vertex order)
+                    if (isDoubleSide) {
+                        const p1_back = project3DTo2D(v1);
+                        const p2_back = project3DTo2D(v3); // Swap v2 and v3 for back face
+                        const p3_back = project3DTo2D(v2);
+
+                        const minX_back = Math.max(0, Math.floor(Math.min(p1_back.x, p2_back.x, p3_back.x)));
+                        const maxX_back = Math.min(width - 1, Math.ceil(Math.max(p1_back.x, p2_back.x, p3_back.x)));
+                        const minY_back = Math.max(0, Math.floor(Math.min(p1_back.y, p2_back.y, p3_back.y)));
+                        const maxY_back = Math.min(height - 1, Math.ceil(Math.max(p1_back.y, p2_back.y, p3_back.y)));
+
+                        function pointInTriangleBack(px, py) {
+                            const v0x = p3_back.x - p1_back.x;
+                            const v0y = p3_back.y - p1_back.y;
+                            const v1x = p2_back.x - p1_back.x;
+                            const v1y = p2_back.y - p1_back.y;
+                            const v2x = px - p1_back.x;
+                            const v2y = py - p1_back.y;
+
+                            const dot00 = v0x * v0x + v0y * v0y;
+                            const dot01 = v0x * v1x + v0y * v1y;
+                            const dot02 = v0x * v2x + v0y * v2y;
+                            const dot11 = v1x * v1x + v1y * v1y;
+                            const dot12 = v1x * v2x + v1y * v2y;
+
+                            const invDenom = 1 / (dot00 * dot11 - dot01 * dot01);
+                            const u = (dot11 * dot02 - dot01 * dot12) * invDenom;
+                            const v = (dot00 * dot12 - dot01 * dot02) * invDenom;
+
+                            return (u >= 0) && (v >= 0) && (u + v <= 1);
+                        }
+
+                        for (let y = minY_back; y <= maxY_back; y++) {
+                            for (let x = minX_back; x <= maxX_back; x++) {
+                                if (pointInTriangleBack(x, y)) {
+                                    const v0x = p3_back.x - p1_back.x;
+                                    const v0y = p3_back.y - p1_back.y;
+                                    const v1x = p2_back.x - p1_back.x;
+                                    const v1y = p2_back.y - p1_back.y;
+                                    const v2x = x - p1_back.x;
+                                    const v2y = y - p1_back.y;
+
+                                    const dot00 = v0x * v0x + v0y * v0y;
+                                    const dot01 = v0x * v1x + v0y * v1y;
+                                    const dot02 = v0x * v2x + v0y * v2y;
+                                    const dot11 = v1x * v1x + v1y * v1y;
+                                    const dot12 = v1x * v2x + v1y * v2y;
+
+                                    const invDenom = 1 / (dot00 * dot11 - dot01 * dot01);
+                                    const u = (dot11 * dot02 - dot01 * dot12) * invDenom;
+                                    const v = (dot00 * dot12 - dot01 * dot02) * invDenom;
+                                    const w = 1 - u - v;
+
+                                    const depth = w * p1_back.z + u * p2_back.z + v * p3_back.z;
+                                    const key = `${Math.floor(x)},${Math.floor(y)}`;
+
+                                    if (!depthBuffer.has(key) || depthBuffer.get(key) < depth) {
+                                        depthBuffer.set(key, depth);
+                                    }
                                 }
                             }
                         }
