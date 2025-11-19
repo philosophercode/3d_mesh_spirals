@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Mesh Spirals v0.5</title>
+    <link rel="stylesheet" href="src/ui/styles.css">
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+    
+    <div id="ui-panel">
+        <div class="ui-header">
+            <h2>Controls</h2>
+        </div>
+        
+        <div class="ui-section">
+            <h3>Geometry</h3>
+            <div class="control-group">
+                <label for="turnsSlider">Turns (N)</label>
+                <input type="range" id="turnsSlider" min="0.5" max="6" step="0.01" value="2.75">
+                <span class="value-display" id="turnsValue">2.75</span>
+            </div>
+            
+            <div class="control-group">
+                <label for="majorRadiusSlider">Major Radius (R)</label>
+                <input type="range" id="majorRadiusSlider" min="0.5" max="3.5" step="0.01" value="1.65">
+                <span class="value-display" id="majorRadiusValue">1.65</span>
+            </div>
+            
+            <div class="control-group">
+                <label for="tubeRadiusSlider">Tube Radius (r0)</label>
+                <input type="range" id="tubeRadiusSlider" min="0.1" max="1.5" step="0.01" value="0.55">
+                <span class="value-display" id="tubeRadiusValue">0.55</span>
+            </div>
+            
+            <div class="control-group">
+                <label for="decaySlider">Decay (k)</label>
+                <input type="range" id="decaySlider" min="0" max="0.6" step="0.01" value="0.18">
+                <span class="value-display" id="decayValue">0.18</span>
+            </div>
+            
+            <div class="control-group">
+                <label for="wallThicknessSlider">Wall Thickness</label>
+                <input type="range" id="wallThicknessSlider" min="0.01" max="0.3" step="0.01" value="0.10">
+                <span class="value-display" id="wallThicknessValue">0.10</span>
+            </div>
+            
+            <div class="control-group">
+                <label for="uDivSlider">U Divisions</label>
+                <input type="range" id="uDivSlider" min="32" max="480" step="8" value="320">
+                <span class="value-display" id="uDivValue">320</span>
+            </div>
+            
+            <div class="control-group">
+                <label for="vDivSlider">V Divisions</label>
+                <input type="range" id="vDivSlider" min="16" max="160" step="4" value="96">
+                <span class="value-display" id="vDivValue">96</span>
+            </div>
+        </div>
+        
+        <div class="ui-section">
+            <h3>Rendering</h3>
+            <div class="control-group">
+                <label for="renderStyleSelect">Render Style</label>
+                <select id="renderStyleSelect">
+                    <option value="Wireframe">Wireframe</option>
+                    <option value="Hidden-line">Hidden-line</option>
+                    <option value="Solid">Solid</option>
+                </select>
+            </div>
+            
+            <div class="control-group">
+                <label for="projectionSelect">Projection</label>
+                <select id="projectionSelect">
+                    <option value="Orthographic">Orthographic</option>
+                    <option value="Perspective">Perspective</option>
+                </select>
+            </div>
+            
+            <div class="control-group">
+                <label for="showInnerSurfaceCheck">Show Inner Surface</label>
+                <input type="checkbox" id="showInnerSurfaceCheck" checked>
+            </div>
+            
+            <div class="control-group">
+                <label for="showOutlineCheck">Show Red Outline</label>
+                <input type="checkbox" id="showOutlineCheck">
+            </div>
+            
+            <div class="control-group">
+                <label for="outlineMethodSelect">Outline Method</label>
+                <select id="outlineMethodSelect">
+                    <option value="Angular Binning">Angular Binning</option>
+                    <option value="Face Normals">Face Normals</option>
+                    <option value="Post-Projection">Post-Projection</option>
+                    <option value="NPR Back-Face">NPR Back-Face</option>
+                </select>
+            </div>
+            
+            <div class="control-group">
+                <label for="lineWidthSlider">Line Width</label>
+                <input type="range" id="lineWidthSlider" min="0.5" max="3" step="0.1" value="1">
+                <span class="value-display" id="lineWidthValue">1</span>
+            </div>
+            
+            <div class="control-group">
+                <label for="outerColorPicker">Outer Color</label>
+                <input type="color" id="outerColorPicker" value="#333333">
+            </div>
+            
+            <div class="control-group">
+                <label for="innerColorPicker">Inner Color</label>
+                <input type="color" id="innerColorPicker" value="#555555">
+            </div>
+            
+            <div class="control-group">
+                <label for="backgroundColorPicker">Background Color</label>
+                <input type="color" id="backgroundColorPicker" value="#ffffff">
+            </div>
+        </div>
+        
+        <div class="ui-section">
+            <h3>Export</h3>
+            <button id="exportSVGBtn" class="btn-primary">Export SVG</button>
+            <button id="exportOBJBtn" class="btn-secondary">Export OBJ</button>
+        </div>
+        
+        <div class="ui-section">
+            <h3>Config</h3>
+            <button id="saveConfigBtn" class="btn-secondary">Save Config</button>
+            <button id="loadConfigBtn" class="btn-secondary">Load Config</button>
+            <input type="file" id="loadFileInput" accept=".json" style="display: none;">
+        </div>
+    </div>
+
+    <!-- Three.js -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.124.0/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.124.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://unpkg.com/three@0.124.0/examples/js/exporters/OBJExporter.js"></script>
+    
+    <!-- Application -->
+    <script src="src/params.js"></script>
+    <script src="src/geometry/tube.js"></script>
+    <script src="src/geometry/innerTube.js"></script>
+    <script src="src/geometry/outerTube.js"></script>
+    <script src="src/geometry/tubeCap.js"></script>
+    <script src="src/rendering/scene.js"></script>
+    <script src="src/rendering/renderer.js"></script>
+    <script src="src/rendering/outline.js"></script>
+    <script src="src/rendering/mesh.js"></script>
+    <script src="src/export/svg.js"></script>
+    <script src="src/export/obj.js"></script>
+    <script src="src/ui/controls.js"></script>
+    <script src="src/main.js"></script>
+</body>
+</html>
+
