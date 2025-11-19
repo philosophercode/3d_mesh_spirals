@@ -30,8 +30,8 @@ const defaultParams = {
     showGrid: false,
 
     // Cross-section
-    showCrossSection: false,
-    crossSectionColor: '#ff3333',
+    showCrossSection: true,
+    crossSectionColor: '#000000',
     crossSectionSpokes: 24,
     crossSectionCircles: 3
 };

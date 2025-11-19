@@ -13,7 +13,7 @@ function downloadPNG(renderer, scene, camera, canvas) {
 function downloadOBJ(meshGroup) {
     console.log('=== OBJ Export Debug ===');
     console.log('Starting OBJ export...');
-    
+
     // Check if OBJExporter is available
     if (typeof THREE === 'undefined' || !THREE.OBJExporter) {
         console.error('OBJExporter is not available. Make sure the OBJExporter script is loaded.');
@@ -31,7 +31,7 @@ function downloadOBJ(meshGroup) {
     const meshInfo = [];
     let totalVertices = 0;
     let totalFaces = 0;
-    
+
     meshGroup.traverse((child) => {
         if (child.isMesh) {
             const geometry = child.geometry;
@@ -39,10 +39,10 @@ function downloadOBJ(meshGroup) {
             const index = geometry.index;
             const vertexCount = positionAttribute ? positionAttribute.count : 0;
             const faceCount = index ? index.count / 3 : 0;
-            
+
             totalVertices += vertexCount;
             totalFaces += faceCount;
-            
+
             meshInfo.push({
                 name: child.name || 'Unnamed',
                 vertices: vertexCount,
@@ -54,7 +54,7 @@ function downloadOBJ(meshGroup) {
                     color: child.material.color ? child.material.color.getHexString() : 'N/A'
                 } : 'N/A'
             });
-            
+
             // Clone the mesh to avoid modifying the original
             const clonedMesh = child.clone();
             // Apply world matrix to geometry
@@ -80,14 +80,14 @@ function downloadOBJ(meshGroup) {
     console.log('Exporting to OBJ format...');
     const exporter = new THREE.OBJExporter();
     const objString = exporter.parse(exportGroup);
-    
+
     // Debug OBJ string
     const objLines = objString.split('\n');
     const objVertices = objLines.filter(line => line.startsWith('v ')).length;
     const objFaces = objLines.filter(line => line.startsWith('f ')).length;
     const objNormals = objLines.filter(line => line.startsWith('vn ')).length;
     const objUVs = objLines.filter(line => line.startsWith('vt ')).length;
-    
+
     console.log('OBJ Export Statistics:');
     console.log(`  OBJ file size: ${(objString.length / 1024).toFixed(2)} KB`);
     console.log(`  Total lines: ${objLines.length}`);
@@ -107,7 +107,7 @@ function downloadOBJ(meshGroup) {
     a.download = filename;
     a.click();
     URL.revokeObjectURL(url);
-    
+
     console.log(`✓ OBJ file downloaded: ${filename}`);
     console.log('=== Export Complete ===');
 }
@@ -115,7 +115,7 @@ function downloadOBJ(meshGroup) {
 function downloadSVG(renderer, scene, camera, meshGroup, params, orbitControls) {
     console.log('=== SVG Export Debug ===');
     console.log('Starting SVG export...');
-    
+
     const width = window.innerWidth;
     const height = window.innerHeight;
     console.log(`Canvas dimensions: ${width} x ${height}`);
@@ -156,28 +156,21 @@ function downloadSVG(renderer, scene, camera, meshGroup, params, orbitControls) 
         return { x, y, z: -vector.z };
     }
 
-    // Collect all elements (triangles and line segments) with depth for sorting
-    const elements = [];
-    let occludingMeshCount = 0;
+    // Build depth buffer from occluding triangles (for visibility testing)
+    // We use the depth info but don't render the triangles themselves
+    console.log('Building depth buffer from occluding triangles...');
+    const depthBuffer = new Map(); // Map of "x,y" -> minDepth (closest to camera)
     let occludingTriangleCount = 0;
-    let lineObjectCount = 0;
-    let totalLineSegments = 0;
-    const lineColors = new Set();
 
-    // Collect occluding triangles
-    console.log('Collecting occluding triangles...');
     meshGroup.traverse((child) => {
         if (child.isMesh && child.material.colorWrite === false) {
-            occludingMeshCount++;
             const geometry = child.geometry;
             const index = geometry.index;
             const positions = geometry.attributes.position;
 
             if (index) {
-                const triangles = index.count / 3;
-                occludingTriangleCount += triangles;
-                
                 for (let i = 0; i < index.count; i += 3) {
+                    occludingTriangleCount++;
                     const v1 = new THREE.Vector3(
                         positions.getX(index.getX(i)),
                         positions.getY(index.getX(i)),
@@ -200,18 +193,96 @@ function downloadSVG(renderer, scene, camera, meshGroup, params, orbitControls) 
                     const p2 = project3DTo2D(v2);
                     const p3 = project3DTo2D(v3);
 
-                    const avgZ = (p1.z + p2.z + p3.z) / 3;
+                    // Rasterize triangle into depth buffer
+                    // Simple approach: sample points within the triangle's bounding box
+                    const minX = Math.max(0, Math.floor(Math.min(p1.x, p2.x, p3.x)));
+                    const maxX = Math.min(width - 1, Math.ceil(Math.max(p1.x, p2.x, p3.x)));
+                    const minY = Math.max(0, Math.floor(Math.min(p1.y, p2.y, p3.y)));
+                    const maxY = Math.min(height - 1, Math.ceil(Math.max(p1.y, p2.y, p3.y)));
 
-                    elements.push({
-                        type: 'triangle',
-                        depth: avgZ,
-                        p1, p2, p3
-                    });
+                    // Barycentric coordinates helper
+                    function pointInTriangle(px, py) {
+                        const v0x = p3.x - p1.x;
+                        const v0y = p3.y - p1.y;
+                        const v1x = p2.x - p1.x;
+                        const v1y = p2.y - p1.y;
+                        const v2x = px - p1.x;
+                        const v2y = py - p1.y;
+
+                        const dot00 = v0x * v0x + v0y * v0y;
+                        const dot01 = v0x * v1x + v0y * v1y;
+                        const dot02 = v0x * v2x + v0y * v2y;
+                        const dot11 = v1x * v1x + v1y * v1y;
+                        const dot12 = v1x * v2x + v1y * v2y;
+
+                        const invDenom = 1 / (dot00 * dot11 - dot01 * dot01);
+                        const u = (dot11 * dot02 - dot01 * dot12) * invDenom;
+                        const v = (dot00 * dot12 - dot01 * dot02) * invDenom;
+
+                        return (u >= 0) && (v >= 0) && (u + v <= 1);
+                    }
+
+                    // Sample at full resolution for accurate occlusion (as per Mathematica discussion)
+                    // This is critical for proper hidden surface removal
+                    for (let y = minY; y <= maxY; y++) {
+                        for (let x = minX; x <= maxX; x++) {
+                            if (pointInTriangle(x, y)) {
+                                // Interpolate depth using barycentric coordinates
+                                const v0x = p3.x - p1.x;
+                                const v0y = p3.y - p1.y;
+                                const v1x = p2.x - p1.x;
+                                const v1y = p2.y - p1.y;
+                                const v2x = x - p1.x;
+                                const v2y = y - p1.y;
+
+                                const dot00 = v0x * v0x + v0y * v0y;
+                                const dot01 = v0x * v1x + v0y * v1y;
+                                const dot02 = v0x * v2x + v0y * v2y;
+                                const dot11 = v1x * v1x + v1y * v1y;
+                                const dot12 = v1x * v2x + v1y * v2y;
+
+                                const invDenom = 1 / (dot00 * dot11 - dot01 * dot01);
+                                const u = (dot11 * dot02 - dot01 * dot12) * invDenom;
+                                const v = (dot00 * dot12 - dot01 * dot02) * invDenom;
+                                const w = 1 - u - v;
+
+                                const depth = w * p1.z + u * p2.z + v * p3.z;
+                                const key = `${Math.floor(x)},${Math.floor(y)}`;
+
+                                // Store maximum depth (closest to camera) at each pixel
+                                // Note: Camera is 180 deg z-flipped, so depth ordering is reversed
+                                if (!depthBuffer.has(key) || depthBuffer.get(key) < depth) {
+                                    depthBuffer.set(key, depth);
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
     });
-    console.log(`  Found ${occludingMeshCount} occluding mesh(es) with ${occludingTriangleCount} triangles`);
+    console.log(`  Processed ${occludingTriangleCount} occluding triangles`);
+    console.log(`  Depth buffer size: ${depthBuffer.size} pixels`);
+
+    // Helper to check if a point is occluded
+    // Returns true if the point is behind (further from camera than) the depth buffer
+    function isOccluded(x, y, depth, tolerance = 0.0001) {
+        const key = `${Math.floor(x)},${Math.floor(y)}`;
+        const bufferDepth = depthBuffer.get(key);
+        if (bufferDepth === undefined) return false; // No occlusion data, assume visible
+
+        // Camera is 180 deg z-flipped, so depth ordering is reversed
+        // In this flipped coordinate system, larger z values are closer to camera
+        // So if our depth is smaller (less positive) than buffer depth, we're occluded
+        return depth < bufferDepth - tolerance;
+    }
+
+    // Collect all line segments with depth for sorting
+    const elements = [];
+    let lineObjectCount = 0;
+    let totalLineSegments = 0;
+    let occludedSegments = 0;
+    const lineColors = new Set();
 
     // Collect line segments
     console.log('Collecting line segments...');
@@ -235,7 +306,7 @@ function downloadSVG(renderer, scene, camera, meshGroup, params, orbitControls) 
             const lineWidth = child.material.linewidth || 1;
             lineColors.add(color);
 
-            // Break into segments
+            // Break into segments and test visibility
             const segments = points.length - 1;
             totalLineSegments += segments;
             for (let i = 0; i < points.length - 1; i++) {
@@ -243,19 +314,53 @@ function downloadSVG(renderer, scene, camera, meshGroup, params, orbitControls) 
                 const p2 = project3DTo2D(points[i + 1]);
                 const avgZ = (p1.z + p2.z) / 2;
 
-                elements.push({
-                    type: 'line',
-                    depth: avgZ,
-                    p1, p2,
-                    color, opacity, lineWidth
-                });
+                // Check if line segment is visible (not occluded)
+                // Sample densely along the line for accurate visibility testing
+                // As per Mathematica discussion: proper hidden surface removal requires
+                // testing against the depth buffer at sufficient resolution
+                let isVisible = false;
+                const samples = Math.max(10, Math.ceil(Math.sqrt(
+                    Math.pow(p2.x - p1.x, 2) + Math.pow(p2.y - p1.y, 2)
+                ))); // Sample at least every pixel along the line
+
+                for (let s = 0; s <= samples; s++) {
+                    const t = s / samples;
+                    const x = p1.x + (p2.x - p1.x) * t;
+                    const y = p1.y + (p2.y - p1.y) * t;
+                    const z = p1.z + (p2.z - p1.z) * t;
+
+                    // Check viewport bounds
+                    if (x < 0 || x >= width || y < 0 || y >= height) {
+                        continue; // Outside viewport
+                    }
+
+                    // If any sample point is not occluded, the line is visible
+                    // Use a small tolerance to account for floating point precision
+                    if (!isOccluded(x, y, z, 0.0001)) {
+                        isVisible = true;
+                        break;
+                    }
+                }
+
+                if (isVisible) {
+                    elements.push({
+                        type: 'line',
+                        depth: avgZ,
+                        p1, p2,
+                        color, opacity, lineWidth
+                    });
+                } else {
+                    occludedSegments++;
+                }
             }
         }
     });
     console.log(`  Found ${lineObjectCount} line object(s) with ${totalLineSegments} total segments`);
+    console.log(`  Visible segments: ${elements.length}`);
+    console.log(`  Occluded segments: ${occludedSegments}`);
     console.log(`  Line colors: ${Array.from(lineColors).join(', ')}`);
 
-    console.log(`Total elements collected: ${elements.length} (${occludingTriangleCount} triangles, ${totalLineSegments} lines)`);
+    console.log(`Total visible elements: ${elements.length} lines (${occludedSegments} occluded segments hidden)`);
 
     // Sort by depth (back to front - lower z values first)
     console.log('Sorting elements by depth...');
@@ -268,13 +373,10 @@ function downloadSVG(renderer, scene, camera, meshGroup, params, orbitControls) 
 
     // Render all elements in sorted order
     console.log('Generating SVG content...');
-    let triangleCount = 0;
     let lineCount = 0;
     elements.forEach(element => {
-        if (element.type === 'triangle') {
-            svg += `<polygon points="${element.p1.x.toFixed(2)},${element.p1.y.toFixed(2)} ${element.p2.x.toFixed(2)},${element.p2.y.toFixed(2)} ${element.p3.x.toFixed(2)},${element.p3.y.toFixed(2)}" fill="${params.backgroundColor}"/>\n`;
-            triangleCount++;
-        } else if (element.type === 'line') {
+        // Only render lines - occluding triangles are skipped
+        if (element.type === 'line') {
             svg += `<line x1="${element.p1.x.toFixed(2)}" y1="${element.p1.y.toFixed(2)}" x2="${element.p2.x.toFixed(2)}" y2="${element.p2.y.toFixed(2)}" stroke="${element.color}" stroke-width="${element.lineWidth}" stroke-opacity="${element.opacity}" stroke-linecap="round"/>\n`;
             lineCount++;
         }
@@ -284,14 +386,13 @@ function downloadSVG(renderer, scene, camera, meshGroup, params, orbitControls) 
 
     // Debug SVG content
     const svgLines = svg.split('\n');
-    const svgPolygons = svgLines.filter(line => line.includes('<polygon')).length;
     const svgLines_count = svgLines.filter(line => line.includes('<line')).length;
-    
+
     console.log('SVG Export Statistics:');
     console.log(`  SVG file size: ${(svg.length / 1024).toFixed(2)} KB`);
     console.log(`  Total lines: ${svgLines.length}`);
-    console.log(`  Polygons rendered: ${svgPolygons}`);
     console.log(`  Lines rendered: ${svgLines_count}`);
+    console.log(`  (Occluding triangles used for depth testing only - not rendered in SVG)`);
     console.log('SVG file preview (first 30 lines):');
     console.log(svgLines.slice(0, 30).join('\n'));
 
@@ -304,7 +405,7 @@ function downloadSVG(renderer, scene, camera, meshGroup, params, orbitControls) 
     a.download = filename;
     a.click();
     URL.revokeObjectURL(url);
-    
+
     console.log(`✓ SVG file downloaded: ${filename}`);
     console.log('=== Export Complete ===');
 }
