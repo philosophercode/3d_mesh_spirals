@@ -137,13 +137,11 @@
             <input type="range" id="twistSlider" min="0" max="1" step="0.01" value="0.5">
         </div>
         
-        <div class="control-group">
-            <label>Background</label>
-            <input type="color" id="bgColorPicker" value="#ffffff">
-        </div>
-        
         <button id="exportSVGBtn">Export SVG</button>
         <button id="exportOBJBtn">Export OBJ</button>
+        <button id="saveBtn">Save Config</button>
+        <button id="loadBtn">Load Config</button>
+        <input type="file" id="loadFileInput" accept=".json" style="display: none;">
     </div>
 
     <!-- Use Three.js r124 which has reliable UMD builds -->

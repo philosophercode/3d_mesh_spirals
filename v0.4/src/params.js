@@ -12,7 +12,7 @@ const defaultParams = {
     twist: 0.0,
     wallThickness: 0.10,
 
-    // Mesh density - much higher for Denes look
+    // Mesh density - optimized for performance while maintaining visual quality
     uDiv: 320,
     vDiv: 96,
 

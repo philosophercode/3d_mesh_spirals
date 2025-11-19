@@ -5,6 +5,114 @@ function clamp(value, min, max) {
     return Math.min(Math.max(value, min), max);
 }
 
+function saveConfig(currentParams, sceneState) {
+    // Determine projection type
+    const projection = sceneState.camera === sceneState.orthoCamera ? 'Orthographic' : 'Perspective';
+    
+    // Save camera state
+    const cameraState = {
+        position: {
+            x: sceneState.camera.position.x,
+            y: sceneState.camera.position.y,
+            z: sceneState.camera.position.z
+        },
+        target: {
+            x: sceneState.orbitControls.target.x,
+            y: sceneState.orbitControls.target.y,
+            z: sceneState.orbitControls.target.z
+        },
+        projection: projection
+    };
+    
+    // Create config object
+    const config = {
+        geometry: { ...currentParams },
+        camera: cameraState
+    };
+    
+    // Convert to JSON and download
+    const json = JSON.stringify(config, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'spiral-config.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+function loadConfig(currentParams, sceneState, scene, gridHelper, syncModernUI, updateMesh) {
+    const fileInput = document.getElementById('loadFileInput');
+    
+    fileInput.onchange = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            try {
+                const config = JSON.parse(event.target.result);
+                
+                // Load geometry parameters
+                if (config.geometry) {
+                    Object.assign(currentParams, config.geometry);
+                    
+                    // Update scene background and grid
+                    scene.background = new THREE.Color(currentParams.backgroundColor);
+                    gridHelper.visible = currentParams.showGrid;
+                    
+                    // Update mesh
+                    updateMesh(sceneState.meshGroup, currentParams);
+                    
+                    // Sync UI sliders
+                    syncModernUI();
+                }
+                
+                // Load camera state
+                if (config.camera) {
+                    // Update projection if needed
+                    if (config.camera.projection) {
+                        updateCameraProjection(sceneState, config.camera.projection);
+                    }
+                    
+                    // Restore camera position
+                    if (config.camera.position) {
+                        sceneState.camera.position.set(
+                            config.camera.position.x,
+                            config.camera.position.y,
+                            config.camera.position.z
+                        );
+                    }
+                    
+                    // Restore camera target
+                    if (config.camera.target) {
+                        sceneState.orbitControls.target.set(
+                            config.camera.target.x,
+                            config.camera.target.y,
+                            config.camera.target.z
+                        );
+                    }
+                    
+                    // Update orbit controls
+                    sceneState.orbitControls.update();
+                }
+            } catch (error) {
+                alert('Error loading config: ' + error.message);
+                console.error('Load error:', error);
+            }
+            
+            // Reset file input
+            fileInput.value = '';
+        };
+        
+        reader.readAsText(file);
+    };
+    
+    fileInput.click();
+}
+
 function setupUI(currentParams, sceneState, scene, gridHelper) {
     // Get modern UI controls
     const shapeSlider = document.getElementById('shapeSlider');
@@ -12,10 +120,11 @@ function setupUI(currentParams, sceneState, scene, gridHelper) {
     const decaySlider = document.getElementById('decaySlider');
     const complexitySlider = document.getElementById('complexitySlider');
     const twistSlider = document.getElementById('twistSlider');
-    const bgColorPicker = document.getElementById('bgColorPicker');
     const exportSVGBtn = document.getElementById('exportSVGBtn');
     const exportOBJBtn = document.getElementById('exportOBJBtn');
     const tightnessSlider = document.getElementById('tightnessSlider');
+    const saveBtn = document.getElementById('saveBtn');
+    const loadBtn = document.getElementById('loadBtn');
 
     // Sync sliders with current params
     function syncModernUI() {
@@ -38,9 +147,6 @@ function setupUI(currentParams, sceneState, scene, gridHelper) {
 
         // Twist: average of twist and h
         twistSlider.value = (currentParams.twist / (4 * Math.PI) + 0.5 + (currentParams.h / 4 + 0.5)) / 2;
-
-        // Background
-        bgColorPicker.value = currentParams.backgroundColor;
     }
 
     // Modern UI event handlers
@@ -84,11 +190,6 @@ function setupUI(currentParams, sceneState, scene, gridHelper) {
         updateMesh(sceneState.meshGroup, currentParams);
     });
 
-    bgColorPicker.addEventListener('input', (e) => {
-        currentParams.backgroundColor = e.target.value;
-        scene.background = new THREE.Color(currentParams.backgroundColor);
-    });
-
     exportSVGBtn.addEventListener('click', () => {
         exportSVGBtn.disabled = true;
         exportSVGBtn.textContent = 'Exporting...';
@@ -114,6 +215,14 @@ function setupUI(currentParams, sceneState, scene, gridHelper) {
             exportOBJBtn.disabled = false;
             exportOBJBtn.textContent = 'Export OBJ';
         }, 1000);
+    });
+
+    saveBtn.addEventListener('click', () => {
+        saveConfig(currentParams, sceneState);
+    });
+
+    loadBtn.addEventListener('click', () => {
+        loadConfig(currentParams, sceneState, scene, gridHelper, syncModernUI, updateMesh);
     });
 
     // Initialize modern UI values

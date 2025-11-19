@@ -14,8 +14,8 @@ function createScene(canvas) {
     const perspCamera = new THREE.PerspectiveCamera(50, aspect, 0.1, 1000);
 
     let camera = orthoCamera;
-    orthoCamera.position.set(5, 4, 5);
-    perspCamera.position.set(5, 4, 5);
+    orthoCamera.position.set(2.729942790364422, -6.166207381438846, 4.53048550272781);
+    perspCamera.position.set(2.729942790364422, -6.166207381438846, 4.53048550272781);
 
     // Check if OrbitControls is available
     if (typeof THREE === 'undefined' || !THREE.OrbitControls) {
