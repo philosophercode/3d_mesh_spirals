@@ -38,9 +38,21 @@ function setupAnimationLoop(renderer, scene, sceneState, params, updateMesh) {
         }
     }
     
-    function animate() {
+    function animate(time = 0) {
         requestAnimationFrame(animate);
+        const seconds = time / 1000;
         sceneState.orbitControls.update();
+        
+        const animations = (sceneState.meshGroup.userData && sceneState.meshGroup.userData.animations) || [];
+        if (animations.length) {
+            animations.forEach((fn) => {
+                try {
+                    fn(seconds);
+                } catch (error) {
+                    console.warn('Mesh animation error:', error);
+                }
+            });
+        }
         
         // Update outline if camera changed and outline is enabled (throttled)
         checkCameraChange();

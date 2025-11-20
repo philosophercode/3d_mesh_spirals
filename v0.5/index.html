@@ -14,7 +14,31 @@
             <h2>Controls</h2>
         </div>
         
-        <div class="ui-section">
+        <div class="ui-section" id="mesh-source-section">
+            <h3>Mesh Source</h3>
+            <div class="control-group">
+                <label for="meshSourceSelect">Source</label>
+                <select id="meshSourceSelect">
+                    <option value="procedural">Procedural Spiral</option>
+                    <option value="preset">Psychedelic Presets</option>
+                    <option value="custom">Upload OBJ</option>
+                </select>
+            </div>
+            
+            <div class="control-group" id="presetMeshControls">
+                <label for="presetMeshSelect">Preset Mesh</label>
+                <select id="presetMeshSelect"></select>
+                <div class="hint-text">Ready-made neon geometries with animated gradients.</div>
+            </div>
+            
+            <div class="control-group" id="customMeshControls">
+                <label for="customMeshInput">Custom OBJ</label>
+                <input type="file" id="customMeshInput" accept=".obj">
+                <div class="hint-text" id="customMeshStatus">No mesh uploaded yet.</div>
+            </div>
+        </div>
+        
+        <div class="ui-section" id="geometry-section">
             <h3>Geometry</h3>
             <div id="geometry-controls">
                 <!-- Dynamic controls will be generated here -->
@@ -97,9 +121,10 @@
     </div>
 
     <!-- Three.js -->
-    <script src="https://cdn.jsdelivr.net/npm/three@0.124.0/build/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.124.0/examples/js/controls/OrbitControls.js"></script>
-    <script src="https://unpkg.com/three@0.124.0/examples/js/exporters/OBJExporter.js"></script>
+            <script src="https://cdn.jsdelivr.net/npm/three@0.124.0/build/three.min.js"></script>
+            <script src="https://cdn.jsdelivr.net/npm/three@0.124.0/examples/js/controls/OrbitControls.js"></script>
+            <script src="https://cdn.jsdelivr.net/npm/three@0.124.0/examples/js/loaders/OBJLoader.js"></script>
+            <script src="https://unpkg.com/three@0.124.0/examples/js/exporters/OBJExporter.js"></script>
     
     <!-- Application -->
     <script src="src/params.js"></script>
@@ -110,10 +135,11 @@
     <script src="src/geometry/innerTube.js"></script>
     <script src="src/geometry/outerTube.js"></script>
     <script src="src/geometry/tubeCap.js"></script>
-    <script src="src/rendering/scene.js"></script>
-    <script src="src/rendering/renderer.js"></script>
-    <script src="src/rendering/outline.js"></script>
-    <script src="src/rendering/mesh.js"></script>
+            <script src="src/rendering/scene.js"></script>
+            <script src="src/rendering/renderer.js"></script>
+            <script src="src/rendering/outline.js"></script>
+            <script src="src/rendering/customMeshes.js"></script>
+            <script src="src/rendering/mesh.js"></script>
     <script src="src/export/svg.js"></script>
     <script src="src/export/obj.js"></script>
     <script src="src/ui/dynamicControls.js"></script>
