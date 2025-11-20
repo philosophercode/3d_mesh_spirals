@@ -158,11 +158,130 @@ function buildWireframeLines(params) {
     return { outerLines, innerLines, depthLines };
 }
 
+function adjustExternalSurfaceOpacity(group, renderStyle) {
+    group.traverse((child) => {
+        if (child.isMesh && child.material) {
+            const mat = child.material;
+            if (!mat.userData) mat.userData = {};
+            if (mat.userData.baseOpacity === undefined) {
+                mat.userData.baseOpacity = mat.opacity !== undefined ? mat.opacity : 1;
+            }
+            const base = mat.userData.baseOpacity;
+            if (renderStyle === 'Wireframe') {
+                mat.transparent = true;
+                mat.opacity = Math.min(base, 0.3);
+            } else if (renderStyle === 'Hidden-line') {
+                mat.transparent = true;
+                mat.opacity = 0.0;
+            } else {
+                mat.opacity = base;
+                mat.transparent = base < 1;
+            }
+        }
+    });
+}
+
+function attachEdgeOverlay(group, params, opacity = 0.9) {
+    group.traverse((child) => {
+        if (child.isMesh && child.geometry) {
+            const edgesGeom = new THREE.EdgesGeometry(child.geometry, 18);
+            const lineMat = new THREE.LineBasicMaterial({
+                color: params.outerColor || '#ffffff',
+                linewidth: params.lineWidth,
+                transparent: true,
+                opacity,
+                depthTest: true,
+                depthWrite: false
+            });
+            const edges = new THREE.LineSegments(edgesGeom, lineMat);
+            edges.renderOrder = 2;
+            edges.position.set(0, 0, 0);
+            edges.rotation.set(0, 0, 0);
+            edges.scale.set(1, 1, 1);
+            child.add(edges);
+        }
+    });
+}
+
+function attachDepthOccluders(group) {
+    group.traverse((child) => {
+        if (child.isMesh && child.geometry) {
+            const depthMaterial = new THREE.MeshBasicMaterial({
+                colorWrite: false,
+                depthWrite: true,
+                depthTest: true,
+                side: THREE.DoubleSide
+            });
+            const depthMesh = new THREE.Mesh(child.geometry, depthMaterial);
+            depthMesh.renderOrder = 0;
+            depthMesh.position.set(0, 0, 0);
+            depthMesh.rotation.set(0, 0, 0);
+            depthMesh.scale.set(1, 1, 1);
+            child.add(depthMesh);
+        }
+    });
+}
+
+function createPlaceholderMesh() {
+    const group = new THREE.Group();
+    const ico = new THREE.IcosahedronGeometry(0.8, 0);
+    const material = new THREE.MeshBasicMaterial({
+        color: 0xff0080,
+        wireframe: true
+    });
+    const mesh = new THREE.Mesh(ico, material);
+    group.add(mesh);
+    const axes = new THREE.AxesHelper(1.5);
+    group.add(axes);
+    return {
+        group,
+        animations: [
+            (time) => {
+                mesh.rotation.y = time * 0.4;
+                mesh.rotation.x = Math.sin(time * 0.7) * 0.2;
+            }
+        ]
+    };
+}
+
+function renderExternalMesh(meshGroup, params) {
+    let instance = null;
+    if (params.meshSource === 'preset' && typeof createPresetMeshInstance === 'function') {
+        instance = createPresetMeshInstance(params.presetMeshId);
+    } else if (params.meshSource === 'custom' && typeof getUploadedCustomMeshInstance === 'function') {
+        instance = getUploadedCustomMeshInstance();
+    }
+    if (!instance || !instance.group) {
+        const placeholder = createPlaceholderMesh();
+        meshGroup.add(placeholder.group);
+        meshGroup.userData.animations = placeholder.animations;
+        return;
+    }
+
+    const root = instance.group;
+    adjustExternalSurfaceOpacity(root, params.renderStyle);
+    if (params.renderStyle === 'Wireframe' || params.renderStyle === 'Hidden-line') {
+        if (params.renderStyle === 'Hidden-line') {
+            attachDepthOccluders(root);
+        }
+        attachEdgeOverlay(root, params, params.renderStyle === 'Wireframe' ? 0.9 : 1.0);
+    }
+
+    meshGroup.add(root);
+    meshGroup.userData.animations = instance.animations || [];
+}
+
 // Outline creation is now in outline.js - using createOutlineLines from there
 
 function updateMesh(meshGroup, params, camera = null) {
     // Clear existing mesh
     meshGroup.clear();
+    meshGroup.userData.animations = [];
+
+    if (params.meshSource && params.meshSource !== 'procedural') {
+        renderExternalMesh(meshGroup, params);
+        return;
+    }
     
     if (params.renderStyle === 'Solid') {
         // Solid rendering: use geometry meshes

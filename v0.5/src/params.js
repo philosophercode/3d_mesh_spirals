@@ -1,5 +1,7 @@
 const defaultParams = {
     // Base geometry type
+    meshSource: 'procedural',   // 'procedural', 'preset', or 'custom'
+    presetMeshId: 'neon-knot',  // Default psychedelic preset
     pathType: 'spiral',         // Path generator type
     crossSectionType: 'circle', // Cross-section generator type
     
