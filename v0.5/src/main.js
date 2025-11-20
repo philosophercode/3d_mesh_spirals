@@ -7,6 +7,24 @@ const renderer = createRenderer(canvas);
 // Initialize with default parameters
 let currentParams = { ...defaultParams };
 
+// Ensure pathType and crossSectionType are set
+if (!currentParams.pathType) {
+    currentParams.pathType = 'spiral';
+}
+if (!currentParams.crossSectionType) {
+    currentParams.crossSectionType = 'circle';
+}
+
+// Initialize modifier states
+if (modifiers) {
+    // Set default enabled states
+    modifiers['radius-decay'].enabled = true;
+    modifiers['twist'].enabled = true;
+    modifiers['eccentricity'].enabled = true;
+    modifiers['taper'].enabled = false;
+    modifiers['wave'].enabled = false;
+}
+
 // Initialize scene
 sceneState.scene.background = new THREE.Color(currentParams.backgroundColor);
 sceneState.gridHelper.visible = currentParams.showGrid;

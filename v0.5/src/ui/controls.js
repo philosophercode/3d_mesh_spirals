@@ -5,21 +5,11 @@ function setupUI(params, sceneState, scene, gridHelper, updateMesh) {
     const updateMeshWithCamera = () => {
         updateMesh(sceneState.meshGroup, params, sceneState.currentCamera);
     };
-    // Get all UI elements
-    const turnsSlider = document.getElementById('turnsSlider');
-    const turnsValue = document.getElementById('turnsValue');
-    const majorRadiusSlider = document.getElementById('majorRadiusSlider');
-    const majorRadiusValue = document.getElementById('majorRadiusValue');
-    const tubeRadiusSlider = document.getElementById('tubeRadiusSlider');
-    const tubeRadiusValue = document.getElementById('tubeRadiusValue');
-    const decaySlider = document.getElementById('decaySlider');
-    const decayValue = document.getElementById('decayValue');
-    const wallThicknessSlider = document.getElementById('wallThicknessSlider');
-    const wallThicknessValue = document.getElementById('wallThicknessValue');
-    const uDivSlider = document.getElementById('uDivSlider');
-    const uDivValue = document.getElementById('uDivValue');
-    const vDivSlider = document.getElementById('vDivSlider');
-    const vDivValue = document.getElementById('vDivValue');
+    
+    // Generate dynamic geometry controls
+    generateGeometryControls(params, updateMeshWithCamera);
+    
+    // Get rendering UI elements
     const renderStyleSelect = document.getElementById('renderStyleSelect');
     const projectionSelect = document.getElementById('projectionSelect');
     const showInnerSurfaceCheck = document.getElementById('showInnerSurfaceCheck');
@@ -38,79 +28,26 @@ function setupUI(params, sceneState, scene, gridHelper, updateMesh) {
     
     // Helper to update value displays
     function updateValueDisplay(element, value, decimals = 2) {
-        element.textContent = value.toFixed(decimals);
+        if (element) {
+            element.textContent = value.toFixed(decimals);
+        }
     }
     
     // Initialize UI values
     function syncUI() {
-        turnsSlider.value = params.N;
-        updateValueDisplay(turnsValue, params.N);
-        majorRadiusSlider.value = params.R;
-        updateValueDisplay(majorRadiusValue, params.R);
-        tubeRadiusSlider.value = params.r0;
-        updateValueDisplay(tubeRadiusValue, params.r0);
-        decaySlider.value = params.k;
-        updateValueDisplay(decayValue, params.k);
-        wallThicknessSlider.value = params.wallThickness;
-        updateValueDisplay(wallThicknessValue, params.wallThickness);
-        uDivSlider.value = params.uDiv;
-        uDivValue.textContent = params.uDiv;
-        vDivSlider.value = params.vDiv;
-        vDivValue.textContent = params.vDiv;
-        renderStyleSelect.value = params.renderStyle;
-        projectionSelect.value = params.projection;
-        showInnerSurfaceCheck.checked = params.showInnerSurface;
-        showOutlineCheck.checked = params.showOutline;
-        outlineMethodSelect.value = params.outlineMethod;
-        lineWidthSlider.value = params.lineWidth;
-        updateValueDisplay(lineWidthValue, params.lineWidth, 1);
-        outerColorPicker.value = params.outerColor;
-        innerColorPicker.value = params.innerColor;
-        backgroundColorPicker.value = params.backgroundColor;
+        if (renderStyleSelect) renderStyleSelect.value = params.renderStyle;
+        if (projectionSelect) projectionSelect.value = params.projection;
+        if (showInnerSurfaceCheck) showInnerSurfaceCheck.checked = params.showInnerSurface;
+        if (showOutlineCheck) showOutlineCheck.checked = params.showOutline;
+        if (outlineMethodSelect) outlineMethodSelect.value = params.outlineMethod;
+        if (lineWidthSlider) {
+            lineWidthSlider.value = params.lineWidth;
+            updateValueDisplay(lineWidthValue, params.lineWidth, 1);
+        }
+        if (outerColorPicker) outerColorPicker.value = params.outerColor;
+        if (innerColorPicker) innerColorPicker.value = params.innerColor;
+        if (backgroundColorPicker) backgroundColorPicker.value = params.backgroundColor;
     }
-    
-    // Geometry controls
-    turnsSlider.addEventListener('input', (e) => {
-        params.N = parseFloat(e.target.value);
-        updateValueDisplay(turnsValue, params.N);
-        updateMeshWithCamera();
-    });
-    
-    majorRadiusSlider.addEventListener('input', (e) => {
-        params.R = parseFloat(e.target.value);
-        updateValueDisplay(majorRadiusValue, params.R);
-        updateMeshWithCamera();
-    });
-    
-    tubeRadiusSlider.addEventListener('input', (e) => {
-        params.r0 = parseFloat(e.target.value);
-        updateValueDisplay(tubeRadiusValue, params.r0);
-        updateMeshWithCamera();
-    });
-    
-    decaySlider.addEventListener('input', (e) => {
-        params.k = parseFloat(e.target.value);
-        updateValueDisplay(decayValue, params.k);
-        updateMeshWithCamera();
-    });
-    
-    wallThicknessSlider.addEventListener('input', (e) => {
-        params.wallThickness = parseFloat(e.target.value);
-        updateValueDisplay(wallThicknessValue, params.wallThickness);
-        updateMeshWithCamera();
-    });
-    
-    uDivSlider.addEventListener('input', (e) => {
-        params.uDiv = parseInt(e.target.value);
-        uDivValue.textContent = params.uDiv;
-        updateMeshWithCamera();
-    });
-    
-    vDivSlider.addEventListener('input', (e) => {
-        params.vDiv = parseInt(e.target.value);
-        vDivValue.textContent = params.vDiv;
-        updateMeshWithCamera();
-    });
     
     // Rendering controls
     renderStyleSelect.addEventListener('change', (e) => {
@@ -236,6 +173,8 @@ function setupUI(params, sceneState, scene, gridHelper, updateMesh) {
                     Object.assign(params, config.geometry);
                     scene.background = new THREE.Color(params.backgroundColor);
                     gridHelper.visible = params.showGrid;
+                    // Regenerate geometry controls with new params
+                    generateGeometryControls(params, updateMeshWithCamera);
                     updateMeshWithCamera();
                     syncUI();
                 }

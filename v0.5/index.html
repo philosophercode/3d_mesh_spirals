@@ -16,46 +16,8 @@
         
         <div class="ui-section">
             <h3>Geometry</h3>
-            <div class="control-group">
-                <label for="turnsSlider">Turns (N)</label>
-                <input type="range" id="turnsSlider" min="0.5" max="6" step="0.01" value="2.75">
-                <span class="value-display" id="turnsValue">2.75</span>
-            </div>
-            
-            <div class="control-group">
-                <label for="majorRadiusSlider">Major Radius (R)</label>
-                <input type="range" id="majorRadiusSlider" min="0.5" max="3.5" step="0.01" value="1.65">
-                <span class="value-display" id="majorRadiusValue">1.65</span>
-            </div>
-            
-            <div class="control-group">
-                <label for="tubeRadiusSlider">Tube Radius (r0)</label>
-                <input type="range" id="tubeRadiusSlider" min="0.1" max="1.5" step="0.01" value="0.55">
-                <span class="value-display" id="tubeRadiusValue">0.55</span>
-            </div>
-            
-            <div class="control-group">
-                <label for="decaySlider">Decay (k)</label>
-                <input type="range" id="decaySlider" min="0" max="0.6" step="0.01" value="0.18">
-                <span class="value-display" id="decayValue">0.18</span>
-            </div>
-            
-            <div class="control-group">
-                <label for="wallThicknessSlider">Wall Thickness</label>
-                <input type="range" id="wallThicknessSlider" min="0.01" max="0.3" step="0.01" value="0.10">
-                <span class="value-display" id="wallThicknessValue">0.10</span>
-            </div>
-            
-            <div class="control-group">
-                <label for="uDivSlider">U Divisions</label>
-                <input type="range" id="uDivSlider" min="32" max="480" step="8" value="320">
-                <span class="value-display" id="uDivValue">320</span>
-            </div>
-            
-            <div class="control-group">
-                <label for="vDivSlider">V Divisions</label>
-                <input type="range" id="vDivSlider" min="16" max="160" step="4" value="96">
-                <span class="value-display" id="vDivValue">96</span>
+            <div id="geometry-controls">
+                <!-- Dynamic controls will be generated here -->
             </div>
         </div>
         
@@ -141,6 +103,9 @@
     
     <!-- Application -->
     <script src="src/params.js"></script>
+    <script src="src/geometry/paths.js"></script>
+    <script src="src/geometry/crossSections.js"></script>
+    <script src="src/geometry/modifiers.js"></script>
     <script src="src/geometry/tube.js"></script>
     <script src="src/geometry/innerTube.js"></script>
     <script src="src/geometry/outerTube.js"></script>
@@ -151,6 +116,7 @@
     <script src="src/rendering/mesh.js"></script>
     <script src="src/export/svg.js"></script>
     <script src="src/export/obj.js"></script>
+    <script src="src/ui/dynamicControls.js"></script>
     <script src="src/ui/controls.js"></script>
     <script src="src/main.js"></script>
 </body>
