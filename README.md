@@ -40,3 +40,8 @@ python -m http.server 8000
 
 - `v0.5/` - Current version (plain HTML/JS, no build step required)
 - `v0.1/`, `v0.2/` - Previous versions with build systems
+
+## Features
+
+- Dynamic geometry controls for paths, cross-sections, and modifiers
+- Shape animation controls (`Animate Geometry`, amplitude, speed) that pulse the tube radius live without reloading the scene
