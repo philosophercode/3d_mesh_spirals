@@ -160,9 +160,92 @@ function buildWireframeLines(params) {
 
 // Outline creation is now in outline.js - using createOutlineLines from there
 
+function buildPrimitiveWireframeLines(geometry, params) {
+    const edgesGeometry = new THREE.EdgesGeometry(geometry);
+    const material = new THREE.LineBasicMaterial({
+        color: new THREE.Color(params.outerColor),
+        linewidth: params.lineWidth,
+        transparent: false
+    });
+    return new THREE.LineSegments(edgesGeometry, material);
+}
+
+function updatePrimitiveMesh(meshGroup, params, camera) {
+    const geometry = buildPrimitiveGeometry(params);
+    if (!geometry) return;
+    
+    if (params.renderStyle === 'Solid') {
+        const material = new THREE.MeshStandardMaterial({
+            color: params.outerColor,
+            side: THREE.DoubleSide,
+            metalness: 0.35,
+            roughness: 0.55
+        });
+        const mesh = new THREE.Mesh(geometry, material);
+        meshGroup.add(mesh);
+        return;
+    }
+    
+    const lineSegments = buildPrimitiveWireframeLines(geometry, params);
+    const allLines = [lineSegments];
+    
+    if (params.renderStyle === 'Wireframe') {
+        if (params.occludeInner) {
+            const depthMaterial = new THREE.MeshBasicMaterial({
+                colorWrite: false,
+                depthWrite: true,
+                depthTest: true,
+                side: THREE.DoubleSide
+            });
+            const depthMesh = new THREE.Mesh(geometry, depthMaterial);
+            depthMesh.renderOrder = 0;
+            meshGroup.add(depthMesh);
+            
+            lineSegments.material.depthTest = true;
+            lineSegments.material.depthWrite = false;
+            lineSegments.renderOrder = 1;
+        }
+        
+        meshGroup.add(lineSegments);
+        
+        if (params.showOutline && camera) {
+            const outlineLines = createOutlineLines(meshGroup, allLines, camera, params);
+            outlineLines.forEach(line => meshGroup.add(line));
+        }
+        return;
+    }
+    
+    if (params.renderStyle === 'Hidden-line') {
+        const depthMaterial = new THREE.MeshBasicMaterial({
+            colorWrite: false,
+            depthWrite: true,
+            depthTest: true,
+            side: THREE.DoubleSide
+        });
+        const depthMesh = new THREE.Mesh(geometry, depthMaterial);
+        depthMesh.renderOrder = 0;
+        meshGroup.add(depthMesh);
+        
+        lineSegments.material.depthTest = true;
+        lineSegments.material.depthWrite = false;
+        lineSegments.renderOrder = 1;
+        meshGroup.add(lineSegments);
+        
+        if (params.showOutline && camera) {
+            const outlineLines = createOutlineLines(meshGroup, allLines, camera, params);
+            outlineLines.forEach(line => meshGroup.add(line));
+        }
+    }
+}
+
 function updateMesh(meshGroup, params, camera = null) {
     // Clear existing mesh
     meshGroup.clear();
+    
+    if ((params.geometryMode || 'tube') === 'primitive') {
+        updatePrimitiveMesh(meshGroup, params, camera);
+        return;
+    }
     
     if (params.renderStyle === 'Solid') {
         // Solid rendering: use geometry meshes

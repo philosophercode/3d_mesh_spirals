@@ -120,6 +120,39 @@ function generateGeometryControls(params, onUpdate) {
     
     container.innerHTML = '';
     
+    // Geometry mode selector
+    const modeSelectContainer = document.createElement('div');
+    modeSelectContainer.className = 'control-group';
+    const modeLabel = document.createElement('label');
+    modeLabel.setAttribute('for', 'geometryMode');
+    modeLabel.textContent = 'Geometry Mode';
+    modeSelectContainer.appendChild(modeLabel);
+    
+    const modeSelect = document.createElement('select');
+    modeSelect.id = 'geometryMode';
+    [
+        { value: 'tube', label: 'Parametric Tube' },
+        { value: 'primitive', label: 'Primitive Shape' }
+    ].forEach(option => {
+        const optionEl = document.createElement('option');
+        optionEl.value = option.value;
+        optionEl.textContent = option.label;
+        modeSelect.appendChild(optionEl);
+    });
+    modeSelect.value = params.geometryMode || 'tube';
+    modeSelect.addEventListener('change', (e) => {
+        params.geometryMode = e.target.value;
+        generateGeometryControls(params, onUpdate);
+        onUpdate();
+    });
+    modeSelectContainer.appendChild(modeSelect);
+    container.appendChild(modeSelectContainer);
+    
+    if ((params.geometryMode || 'tube') === 'primitive') {
+        buildPrimitiveControls(container, params, onUpdate);
+        return;
+    }
+    
     // Path type selector
     const pathSelectContainer = document.createElement('div');
     pathSelectContainer.className = 'control-group';
@@ -335,5 +368,51 @@ function generateGeometryControls(params, onUpdate) {
         vDivControl.querySelector('.value-display').textContent = e.target.value;
     });
     container.appendChild(vDivControl);
+}
+
+function buildPrimitiveControls(container, params, onUpdate) {
+    // Primitive type selector
+    const primitiveSelectContainer = document.createElement('div');
+    primitiveSelectContainer.className = 'control-group';
+    const primitiveLabel = document.createElement('label');
+    primitiveLabel.setAttribute('for', 'primitiveType');
+    primitiveLabel.textContent = 'Primitive Type';
+    primitiveSelectContainer.appendChild(primitiveLabel);
+    
+    const primitiveSelect = document.createElement('select');
+    primitiveSelect.id = 'primitiveType';
+    Object.keys(primitiveGenerators).forEach(key => {
+        const option = document.createElement('option');
+        option.value = key;
+        option.textContent = primitiveGenerators[key].name;
+        primitiveSelect.appendChild(option);
+    });
+    primitiveSelect.value = params.primitiveType || 'sphere';
+    primitiveSelect.addEventListener('change', (e) => {
+        params.primitiveType = e.target.value;
+        generateGeometryControls(params, onUpdate);
+        onUpdate();
+    });
+    primitiveSelectContainer.appendChild(primitiveSelect);
+    container.appendChild(primitiveSelectContainer);
+    
+    // Primitive-specific parameter controls
+    const primitiveGen = getPrimitiveGenerator(params.primitiveType || 'sphere');
+    if (primitiveGen && primitiveGen.params) {
+        Object.entries(primitiveGen.params).forEach(([key, config]) => {
+            addControl(container, key, config, params, onUpdate);
+        });
+    }
+    
+    // Deformation controls
+    const deformHeader = document.createElement('h4');
+    deformHeader.textContent = 'Deformations';
+    deformHeader.style.marginTop = '20px';
+    deformHeader.style.marginBottom = '10px';
+    container.appendChild(deformHeader);
+    
+    Object.entries(primitiveDeformers).forEach(([key, config]) => {
+        addControl(container, key, config, params, onUpdate);
+    });
 }
 

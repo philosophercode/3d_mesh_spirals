@@ -7,6 +7,11 @@ const renderer = createRenderer(canvas);
 // Initialize with default parameters
 let currentParams = { ...defaultParams };
 
+// Ensure geometry mode defaults exist
+if (!currentParams.geometryMode) {
+    currentParams.geometryMode = 'tube';
+}
+
 // Ensure pathType and crossSectionType are set
 if (!currentParams.pathType) {
     currentParams.pathType = 'spiral';
