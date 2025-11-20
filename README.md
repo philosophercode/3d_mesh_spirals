@@ -2,6 +2,8 @@
 
 A 3D mesh spiral generator with interactive controls and export capabilities.
 
+🌐 **Live Demo:** [https://philosophercode.github.io/3d_mesh_spirals/](https://philosophercode.github.io/3d_mesh_spirals/)
+
 ## GitHub Pages Deployment
 
 This project is set up to deploy to GitHub Pages automatically via GitHub Actions.
@@ -20,7 +22,7 @@ This project is set up to deploy to GitHub Pages automatically via GitHub Action
 
 3. **Access your site:**
    - After deployment completes, your site will be available at:
-     `https://[your-username].github.io/3d_mesh_spirals/`
+     [https://philosophercode.github.io/3d_mesh_spirals/](https://philosophercode.github.io/3d_mesh_spirals/)
    - The deployment status can be checked in the **Actions** tab
 
 ### Manual Deployment
