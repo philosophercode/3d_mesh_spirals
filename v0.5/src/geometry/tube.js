@@ -86,9 +86,21 @@ function computePosition(u, v, rTube, params, isInner = false) {
         radius = modifiers['taper'].apply(u, radius, params);
     }
     
+    // Apply shape animation offset (breathing/pulsing effect)
+    const animationOffset = params.shapeAnimationOffset || 0;
+    if (animationOffset !== 0) {
+        radius *= (1 + animationOffset);
+    }
+    
+    // Ensure radius stays within valid bounds
+    const wallThickness = params.wallThickness || 0;
+    const minRadius = params.rMin || 0.015;
+    const minOuterRadius = wallThickness > 0 ? minRadius + wallThickness : minRadius;
+    radius = Math.max(radius, minOuterRadius);
+    
     // Apply wall thickness for inner surface
     if (isInner) {
-        radius -= params.wallThickness;
+        radius = Math.max(radius - wallThickness, minRadius);
     }
     
     // Apply twist modifier

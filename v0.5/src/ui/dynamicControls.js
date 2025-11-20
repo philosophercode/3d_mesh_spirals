@@ -3,16 +3,16 @@
 function createControlGroup(label, controlElement) {
     const group = document.createElement('div');
     group.className = 'control-group';
-    
+
     const labelEl = document.createElement('label');
     labelEl.textContent = label;
     if (controlElement.id) {
         labelEl.setAttribute('for', controlElement.id);
     }
-    
+
     group.appendChild(labelEl);
     group.appendChild(controlElement);
-    
+
     return group;
 }
 
@@ -238,7 +238,7 @@ function generateGeometryControls(params, onUpdate) {
         toggleLabel.setAttribute('for', `modifier_${key}`);
         toggleLabel.textContent = modifier.name;
         toggleContainer.appendChild(toggleLabel);
-        
+
         const toggle = document.createElement('input');
         toggle.type = 'checkbox';
         toggle.id = `modifier_${key}`;
@@ -303,6 +303,35 @@ function generateGeometryControls(params, onUpdate) {
         container.appendChild(controlsDiv);
     });
     
+    // Shape animation controls
+    const animationHeader = document.createElement('h4');
+    animationHeader.textContent = 'Shape Animation';
+    animationHeader.style.marginTop = '20px';
+    animationHeader.style.marginBottom = '10px';
+    container.appendChild(animationHeader);
+    
+    addControl(container, 'animateShape', {
+        type: 'checkbox',
+        label: 'Animate Geometry',
+        default: false
+    }, params, onUpdate);
+    
+    addControl(container, 'shapeAnimationAmplitude', {
+        type: 'range',
+        min: 0,
+        max: 0.5,
+        step: 0.01,
+        label: 'Animation Amplitude'
+    }, params, onUpdate);
+    
+    addControl(container, 'shapeAnimationSpeed', {
+        type: 'range',
+        min: 0.1,
+        max: 3,
+        step: 0.05,
+        label: 'Animation Speed (cycles/s)'
+    }, params, onUpdate);
+      
     // Mesh density controls
     const densityHeader = document.createElement('h4');
     densityHeader.textContent = 'Mesh Density';

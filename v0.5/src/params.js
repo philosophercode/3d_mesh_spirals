@@ -72,6 +72,12 @@ const defaultParams = {
     waveFrequency: 1.0,         // Wave frequency
     wavePhase: 0.0,             // Wave phase
     
+    // Shape animation
+    animateShape: false,        // Enable geometry animation
+    shapeAnimationSpeed: 0.5,   // Cycles per second
+    shapeAnimationAmplitude: 0.15, // Scale factor applied to tube radius
+    shapeAnimationOffset: 0.0,  // Internal state, updated at runtime
+    
     // Legacy parameters (for backward compatibility)
     mode: 'Exponential',        // 'Exponential' or 'Linear'
     twist: 0.0,                 // Legacy twist (maps to twistAmount)
