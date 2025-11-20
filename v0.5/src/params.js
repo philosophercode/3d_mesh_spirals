@@ -1,7 +1,9 @@
 const defaultParams = {
-    // Base geometry type
-    pathType: 'spiral',         // Path generator type
-    crossSectionType: 'circle', // Cross-section generator type
+    // Base geometry setup
+    geometryMode: 'tube',        // 'tube' or 'primitive'
+    pathType: 'spiral',          // Path generator type (tube mode)
+    crossSectionType: 'circle',  // Cross-section generator type (tube mode)
+    primitiveType: 'sphere',     // Primitive generator type (primitive mode)
     
     // Initialize default path and cross-section types if not set
     // (will be set by dynamic controls)
@@ -59,6 +61,27 @@ const defaultParams = {
     pinchWidth: 0.5,            // Pinch width (for deformed-sphere-pinch)
     noiseStrength: 0.3,         // Noise strength (for deformed-sphere-noise)
     noiseScale: 3.0,            // Noise scale (for deformed-sphere-noise)
+    
+    // Primitive parameters (dynamically loaded based on primitiveType)
+    primitiveRadius: 1.8,           // Shared radius default
+    primitiveSegments: 64,          // Disc segments
+    primitiveWidthSegments: 32,     // Sphere width segments
+    primitiveHeightSegments: 24,    // Sphere height segments
+    primitiveBoxSize: 2.0,          // Cube size
+    primitiveBoxSubdivisions: 1,    // Cube subdivisions
+    primitiveHeight: 2.5,           // Prism height
+    primitiveStackSegments: 1,      // Prism stack segments
+    primitiveTopRadius: 1.4,        // Decagonal top radius
+    primitiveBottomRadius: 1.4,     // Decagonal bottom radius
+    primitiveDetail: 0,             // Dodecahedron detail level
+    
+    // Primitive deformation controls
+    primitiveTwistAmount: 0.0,      // Twist in turns
+    primitiveTaperAmount: 0.0,      // Linear taper
+    primitiveBendAmount: 0.0,       // Bend angle in radians
+    primitiveNoiseAmplitude: 0.0,   // Noise displacement
+    primitiveNoiseFrequency: 2.5,   // Noise frequency
+    primitiveInflate: 0.0,          // Inflate/deflate amount
     
     // Modifiers
     decayMode: 'Exponential',   // 'None', 'Exponential', or 'Linear'

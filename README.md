@@ -38,5 +38,5 @@ python -m http.server 8000
 
 ## Project Structure
 
-- `v0.5/` - Current version (plain HTML/JS, no build step required)
+- `v0.5/` - Current version (plain HTML/JS, no build step required). Includes the new geometry mode toggle so you can switch between parametric tubes (spirals, helices, etc.) and editable primitive shapes such as spheres, cubes, pentagonal/decagonal prisms, discs, and dodecahedrons. Primitive shapes support real-time twist, taper, bend, noise, and inflate deformations directly in the UI.
 - `v0.1/`, `v0.2/` - Previous versions with build systems
