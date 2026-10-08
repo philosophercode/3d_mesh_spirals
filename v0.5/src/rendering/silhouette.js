@@ -267,6 +267,12 @@ function computeCutContours(meshGroup, params, camera, width, height, options = 
         }
     });
 
+    // Only what's on screen gets cut, matching the engrave lines in the export
+    minX = Math.max(minX, 0);
+    minY = Math.max(minY, 0);
+    maxX = Math.min(maxX, width);
+    maxY = Math.min(maxY, height);
+
     if (!isFinite(minX) || maxX - minX <= 0 || maxY - minY <= 0) {
         entries.forEach(({ geometry, owned }) => { if (owned) geometry.dispose(); });
         return [];
@@ -292,6 +298,15 @@ function computeCutContours(meshGroup, params, camera, width, height, options = 
         }
     });
     entries.forEach(({ geometry, owned }) => { if (owned) geometry.dispose(); });
+
+    // Triangles running off screen spill into the border; clear it so loops
+    // close along the screen edge
+    mask.fill(0, 0, pad * W);
+    mask.fill(0, (H - pad) * W);
+    for (let y = pad; y < H - pad; y++) {
+        mask.fill(0, y * W, y * W + pad);
+        mask.fill(0, (y + 1) * W - pad, (y + 1) * W);
+    }
 
     // Trace, drop specks, simplify
     const minArea = Math.pow(opts.minFeature * opts.resolution, 2);
