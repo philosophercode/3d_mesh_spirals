@@ -201,6 +201,12 @@ function updateMesh(meshGroup, params, camera = null) {
         meshGroup.add(new THREE.Mesh(startCapGeometry, capMaterial));
         meshGroup.add(new THREE.Mesh(endCapGeometry, capMaterial));
         
+        // Add outline lines if enabled
+        if (params.showOutline && camera) {
+            const outlineLines = createOutlineLines(meshGroup, [], camera, params);
+            outlineLines.forEach(line => meshGroup.add(line));
+        }
+        
     } else if (params.renderStyle === 'Wireframe') {
         // Wireframe rendering
         const { outerLines, innerLines, depthLines } = buildWireframeLines(params);

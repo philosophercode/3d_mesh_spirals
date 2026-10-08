@@ -93,6 +93,6 @@ const defaultParams = {
     backgroundColor: '#ffffff', // Background color
     showGrid: false,            // Show grid helper
     showOutline: false,         // Show red outline on perimeter
-    outlineMethod: 'Angular Binning' // 'Angular Binning', 'Face Normals', 'Post-Projection', 'NPR Back-Face'
+    outlineMethod: 'Silhouette Contour' // 'Silhouette Contour', 'Angular Binning', 'Face Normals', 'Post-Projection', 'NPR Back-Face'
 };
 
