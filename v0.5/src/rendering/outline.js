@@ -1,11 +1,10 @@
-// Four different methods for generating red outline/silhouette
+// Different methods for generating red outline/silhouette
 
 // Method 1: Angular Binning (current method)
 function createOutlineAngularBinning(allLines, camera, params) {
     if (allLines.length === 0) return [];
     
-    const width = window.innerWidth;
-    const height = window.innerHeight;
+    const { width, height } = getViewportSize();
     
     function project3DTo2D(point) {
         const vector = point.clone();
@@ -401,8 +400,7 @@ function createOutlineFaceNormals(meshGroup, camera, params) {
 function createOutlinePostProjection(allLines, camera, params) {
     if (allLines.length === 0) return [];
     
-    const width = window.innerWidth;
-    const height = window.innerHeight;
+    const { width, height } = getViewportSize();
     
     function project3DTo2D(point) {
         const vector = point.clone();
@@ -671,23 +669,71 @@ function createOutlineNPR(meshGroup, camera, params) {
     return outlineLines;
 }
 
+// Method 5: Silhouette Contour - traced boundary of the projected solid.
+// Same contours the SVG export writes as the red cut layer.
+function createOutlineSilhouette(meshGroup, camera, params) {
+    const { width, height } = getViewportSize();
+    const contours = computeCutContours(meshGroup, params, camera, width, height, {
+        resolution: Math.max(width, height)
+    });
+    if (contours.length === 0) return [];
+
+    // Contours are screen-space; lift them into the scene at the depth of the
+    // shape's centre so they stay roughly in place while the camera moves
+    const center = new THREE.Box3().setFromObject(meshGroup).getCenter(new THREE.Vector3());
+    const ndcZ = center.project(camera).z;
+
+    // WebGL ignores linewidth, so thicken with a few copies offset by a pixel
+    const offset = params.lineWidth * 2.5 / 3;
+    const offsets = [[0, 0], [offset, 0], [-offset, 0], [0, offset], [0, -offset]];
+    const material = new THREE.LineBasicMaterial({
+        color: 0xff0000,
+        depthTest: false,
+        depthWrite: false
+    });
+
+    const outlineLines = [];
+    contours.forEach(contour => {
+        offsets.forEach(([dx, dy]) => {
+            const points = contour.points.map(p => new THREE.Vector3(
+                (p.x + dx) / width * 2 - 1,
+                -(p.y + dy) / height * 2 + 1,
+                ndcZ
+            ).unproject(camera));
+            const line = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(points), material);
+            line.renderOrder = 2;
+            outlineLines.push(line);
+        });
+    });
+
+    return outlineLines;
+}
+
 // Main function to create outline based on method
 function createOutlineLines(meshGroup, allLines, camera, params) {
     if (!params.showOutline) {
         return [];
     }
     
+    let outlineLines;
     switch (params.outlineMethod) {
         case 'Angular Binning':
-            return createOutlineAngularBinning(allLines, camera, params);
+            outlineLines = createOutlineAngularBinning(allLines, camera, params);
+            break;
         case 'Face Normals':
-            return createOutlineFaceNormals(meshGroup, camera, params);
+            outlineLines = createOutlineFaceNormals(meshGroup, camera, params);
+            break;
         case 'Post-Projection':
-            return createOutlinePostProjection(allLines, camera, params);
+            outlineLines = createOutlinePostProjection(allLines, camera, params);
+            break;
         case 'NPR Back-Face':
-            return createOutlineNPR(meshGroup, camera, params);
+            outlineLines = createOutlineNPR(meshGroup, camera, params);
+            break;
         default:
-            return createOutlineAngularBinning(allLines, camera, params);
+            outlineLines = createOutlineSilhouette(meshGroup, camera, params);
     }
+    
+    // Tag preview lines so the SVG export doesn't treat them as engrave lines
+    outlineLines.forEach(line => { line.userData.isOutline = true; });
+    return outlineLines;
 }
-

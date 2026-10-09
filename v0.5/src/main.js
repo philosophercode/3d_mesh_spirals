@@ -34,6 +34,9 @@ updateMesh(sceneState.meshGroup, currentParams, sceneState.currentCamera);
 sceneState.orbitControls.target.set(0, 0, 0);
 sceneState.orbitControls.update();
 
+// Store renderer in sceneState (layout and export use it)
+sceneState.renderer = renderer;
+
 // Setup UI
 setupUI(
     currentParams,
@@ -43,15 +46,9 @@ setupUI(
     updateMesh
 );
 
-// Store renderer in sceneState for export
-sceneState.renderer = renderer;
-
 // Setup animation loop
 setupAnimationLoop(renderer, sceneState.scene, sceneState, currentParams, updateMesh);
 
 // Handle resize
-window.addEventListener('resize', () => {
-    handleResize(sceneState);
-    renderer.setSize(window.innerWidth, window.innerHeight);
-});
+window.addEventListener('resize', () => handleResize(sceneState));
 

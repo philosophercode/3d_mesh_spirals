@@ -15,7 +15,7 @@ function buildWireframeLines(params) {
         
         // Meridians (constant v, varying u)
         if (params.showMeridians) {
-            const vStep = Math.max(1, Math.floor(params.vDiv / 48));
+            const vStep = Math.max(1, Math.floor(params.vDiv / (params.meridianLines || 48)));
             for (let j = 0; j < params.vDiv; j += vStep) {
                 const points = [];
                 const v = 2 * Math.PI * j / params.vDiv;
@@ -36,7 +36,7 @@ function buildWireframeLines(params) {
         
         // Parallels (constant u, varying v)
         if (params.showParallels) {
-            const uStep = Math.max(1, Math.floor(params.uDiv / 80));
+            const uStep = Math.max(1, Math.floor(params.uDiv / (params.parallelLines || 80)));
             for (let i = 0; i <= params.uDiv; i += uStep) {
                 const points = [];
                 const u = uMax * i / params.uDiv;
@@ -103,8 +103,8 @@ function buildWireframeLines(params) {
             }));
             capLines.push(innerLine);
             
-            // Radial lines connecting outer to inner edge
-            const radialStep = Math.max(1, Math.floor(params.vDiv / 24)); // Show radial spokes
+            // Radial spokes connecting outer to inner edge, continuing the meridians across the rim
+            const radialStep = Math.max(1, Math.floor(params.vDiv / (params.meridianLines || 48)));
             for (let j = 0; j < params.vDiv; j += radialStep) {
                 const v = 2 * Math.PI * j / params.vDiv;
                 const outerPos = getPosition(u, v, false);
@@ -121,14 +121,8 @@ function buildWireframeLines(params) {
             }
         } else {
             // When inner surface is not shown, add radial lines from center to outer edge
-            // to make the cap more visible
-            const centerPos = getPosition(u, 0, false);
-            // Use the position at the major radius as the center
-            const rTube = computeRadiusAtU(u, params);
-            const centerX = params.R * Math.cos(u);
-            const centerY = params.R * Math.sin(u);
-            const centerZ = params.h * (u / (2 * Math.PI));
-            const center = new THREE.Vector3(centerX, centerY, centerZ);
+            // to make the cap more visible. Spokes start at the tube's centreline
+            const center = getPathGenerator(params.pathType || 'spiral').computePath(u, params);
             
             const radialStep = Math.max(1, Math.floor(params.vDiv / 16)); // Show radial spokes
             for (let j = 0; j < params.vDiv; j += radialStep) {
@@ -201,6 +195,12 @@ function updateMesh(meshGroup, params, camera = null) {
         meshGroup.add(new THREE.Mesh(startCapGeometry, capMaterial));
         meshGroup.add(new THREE.Mesh(endCapGeometry, capMaterial));
         
+        // Add outline lines if enabled
+        if (params.showOutline && camera) {
+            const outlineLines = createOutlineLines(meshGroup, [], camera, params);
+            outlineLines.forEach(line => meshGroup.add(line));
+        }
+        
     } else if (params.renderStyle === 'Wireframe') {
         // Wireframe rendering
         const { outerLines, innerLines, depthLines } = buildWireframeLines(params);
@@ -212,8 +212,12 @@ function updateMesh(meshGroup, params, camera = null) {
             const depthMaterial = new THREE.MeshBasicMaterial({
                 colorWrite: false,
                 depthWrite: true,  // Explicitly write to depth buffer
+                // Push occluders back a touch so lines lying on them never z-fight
+                polygonOffset: true,
+                polygonOffsetFactor: 1,
+                polygonOffsetUnits: 1,
                 depthTest: true,
-                side: THREE.FrontSide
+                side: THREE.DoubleSide  // occlude from either side, whatever the triangle winding
             });
             const depthMesh = new THREE.Mesh(outerGeometry, depthMaterial);
             depthMesh.renderOrder = 0;  // Render first
@@ -224,6 +228,10 @@ function updateMesh(meshGroup, params, camera = null) {
             const capDepthMaterial = new THREE.MeshBasicMaterial({
                 colorWrite: false,
                 depthWrite: true,  // Explicitly write to depth buffer
+                // Push occluders back a touch so lines lying on them never z-fight
+                polygonOffset: true,
+                polygonOffsetFactor: 1,
+                polygonOffsetUnits: 1,
                 depthTest: true,
                 side: THREE.DoubleSide  // DoubleSide so caps occlude from both sides
             });
@@ -276,8 +284,12 @@ function updateMesh(meshGroup, params, camera = null) {
         const depthMaterial = new THREE.MeshBasicMaterial({
             colorWrite: false,
             depthWrite: true,  // Explicitly write to depth buffer
+            // Push occluders back a touch so lines lying on them never z-fight
+            polygonOffset: true,
+            polygonOffsetFactor: 1,
+            polygonOffsetUnits: 1,
             depthTest: true,
-            side: THREE.FrontSide
+            side: THREE.DoubleSide  // occlude from either side, whatever the triangle winding
         });
         const depthMesh = new THREE.Mesh(outerGeometry, depthMaterial);
         depthMesh.renderOrder = 0;  // Render first
@@ -288,6 +300,10 @@ function updateMesh(meshGroup, params, camera = null) {
         const capDepthMaterial = new THREE.MeshBasicMaterial({
             colorWrite: false,
             depthWrite: true,  // Explicitly write to depth buffer
+            // Push occluders back a touch so lines lying on them never z-fight
+            polygonOffset: true,
+            polygonOffsetFactor: 1,
+            polygonOffsetUnits: 1,
             depthTest: true,
             side: THREE.DoubleSide  // DoubleSide so caps occlude from both sides
         });

@@ -4,6 +4,14 @@ A 3D mesh spiral generator with interactive controls and export capabilities.
 
 🌐 **Live Demo:** [https://philosophercode.github.io/3d_mesh_spirals/](https://philosophercode.github.io/3d_mesh_spirals/)
 
+## Presets
+
+- **Agnes Denes, Snail Pyramid (1988)**: a recreation of the MoMA drawing. Open it directly at
+  [https://philosophercode.github.io/3d_mesh_spirals/#denes-snail-pyramid](https://philosophercode.github.io/3d_mesh_spirals/#denes-snail-pyramid)
+- Save your own settings with **Save Current As** in the Preset section (kept in your browser).
+
+On phones the controls sit in a bottom sheet; tap **Controls** to open or close it.
+
 ## GitHub Pages Deployment
 
 This project is set up to deploy to GitHub Pages automatically via GitHub Actions.

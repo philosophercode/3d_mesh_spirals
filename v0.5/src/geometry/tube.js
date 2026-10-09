@@ -4,7 +4,7 @@
 function computeRadiusAtU(u, params) {
     // Use the new modifier system if available and enabled
     if (modifiers && modifiers['radius-decay'] && modifiers['radius-decay'].enabled) {
-        return modifiers['radius-decay'].apply(u, params.r0, params);
+        return Math.max(modifiers['radius-decay'].apply(u, params.r0, params), params.rMin || 0);
     }
     // Fallback to old method
     let r;
@@ -53,6 +53,9 @@ function computeFrenetFrame(u, pathGen, params) {
 
 // Main position computation using parametric system
 function computePosition(u, v, rTube, params, isInner = false) {
+    // Rotate where the grid sits around the tube without changing the surface
+    v += params.meridianOffset || 0;
+    
     // Backward compatibility: if pathType is not set, use old spiral method
     if (!params.pathType) {
         // Legacy spiral computation
@@ -75,20 +78,11 @@ function computePosition(u, v, rTube, params, isInner = false) {
     // Compute Frenet frame for proper orientation
     const { tangent, normal, binormal } = computeFrenetFrame(u, pathGen, params);
     
-    // Get base radius
-    let radius = rTube || params.r0;
+    // Base radius; rTube already includes radius decay (see computeRadiusAtU)
+    let radius = rTube !== undefined ? rTube : computeRadiusAtU(u, params);
     
-    // Apply radius modifiers
-    if (modifiers && modifiers['radius-decay'] && modifiers['radius-decay'].enabled) {
-        radius = modifiers['radius-decay'].apply(u, radius, params);
-    }
     if (modifiers && modifiers['taper'] && modifiers['taper'].enabled) {
         radius = modifiers['taper'].apply(u, radius, params);
-    }
-    
-    // Apply wall thickness for inner surface
-    if (isInner) {
-        radius -= params.wallThickness;
     }
     
     // Apply twist modifier
@@ -107,6 +101,16 @@ function computePosition(u, v, rTube, params, isInner = false) {
         const scale = modifiers['eccentricity'].apply(vModified, 1, params);
         offsetX *= scale;
         offsetY *= scale;
+    }
+    
+    // Inner surface: the wall thins in proportion to the tube, so it keeps its
+    // thickness at the opening and can never turn inside out near the tip.
+    // The wall can be thinner top and bottom than at the sides.
+    if (isInner) {
+        const side = params.wallThickness / params.r0;
+        const ratio = params.wallHeightRatio !== undefined ? params.wallHeightRatio : 1;
+        offsetX *= Math.max(0, 1 - side);
+        offsetY *= Math.max(0, 1 - side * ratio);
     }
     
     // Transform cross-section offset to world space using Frenet frame

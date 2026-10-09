@@ -65,16 +65,81 @@ function updateCameraProjection(sceneState, projection) {
     sceneState.orbitControls.update();
 }
 
-function handleResize(sceneState) {
-    const aspect = window.innerWidth / window.innerHeight;
-    
-    // Update orthographic camera
-    sceneState.orthoCamera.left = -sceneState.orthoSize * aspect;
-    sceneState.orthoCamera.right = sceneState.orthoSize * aspect;
-    sceneState.orthoCamera.updateProjectionMatrix();
-    
-    // Update perspective camera
-    sceneState.perspCamera.aspect = aspect;
-    sceneState.perspCamera.updateProjectionMatrix();
+// Narrow windows show more height so the width of the scene still fits
+const DESIGN_ASPECT = 1.6;
+
+// Size of the drawing area in CSS pixels. Every projection (screen, outline,
+// SVG export) uses this, so they all agree with what's on screen
+function getViewportSize() {
+    const canvas = document.getElementById('canvas');
+    return {
+        width: (canvas && canvas.clientWidth) || window.innerWidth,
+        height: (canvas && canvas.clientHeight) || window.innerHeight
+    };
 }
 
+// Phones show the controls as a full-width sheet along the bottom
+function isBottomSheet(panel) {
+    return panel.getBoundingClientRect().width >= window.innerWidth * 0.9;
+}
+
+// On phones the canvas stops where the sheet starts, so nothing scrolls over it
+function layoutCanvas(sceneState) {
+    const panel = document.getElementById('ui-panel');
+    let height = window.innerHeight;
+    if (panel && isBottomSheet(panel)) {
+        height = Math.max(120, Math.round(panel.getBoundingClientRect().top));
+    }
+    if (sceneState.renderer) {
+        sceneState.renderer.setSize(window.innerWidth, height);
+    }
+}
+
+function handleResize(sceneState) {
+    layoutCanvas(sceneState);
+    const { width, height } = getViewportSize();
+    const aspect = width / height;
+    const stretch = Math.max(1, DESIGN_ASPECT / aspect);
+    
+    // Update orthographic camera
+    const halfHeight = sceneState.orthoSize * stretch;
+    sceneState.orthoCamera.top = halfHeight;
+    sceneState.orthoCamera.bottom = -halfHeight;
+    sceneState.orthoCamera.left = -halfHeight * aspect;
+    sceneState.orthoCamera.right = halfHeight * aspect;
+    
+    // Update perspective camera (50 degrees on wide windows)
+    sceneState.perspCamera.aspect = aspect;
+    sceneState.perspCamera.fov = THREE.MathUtils.radToDeg(
+        2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(25)) * stretch)
+    );
+    
+    applyViewArea(sceneState);
+}
+
+// The part of the canvas the controls panel leaves uncovered
+function getViewArea() {
+    const { width, height } = getViewportSize();
+    const panel = document.getElementById('ui-panel');
+    if (!panel || isBottomSheet(panel)) return { x: 0, y: 0, width, height };
+    // Floating panel on the right
+    const left = panel.getBoundingClientRect().left;
+    return { x: 0, y: 0, width: Math.min(width, Math.max(width * 0.4, left)), height };
+}
+
+// Centre the scene in the uncovered area. Exports project with the same
+// camera, so they stay in sync with what's on screen
+function applyViewArea(sceneState) {
+    const { width, height } = getViewportSize();
+    const area = getViewArea();
+    const dx = width / 2 - (area.x + area.width / 2);
+    const dy = height / 2 - (area.y + area.height / 2);
+    [sceneState.orthoCamera, sceneState.perspCamera].forEach(cam => {
+        if (Math.abs(dx) < 1 && Math.abs(dy) < 1) {
+            cam.clearViewOffset();
+        } else {
+            cam.setViewOffset(width, height, dx, dy, width, height);
+        }
+        cam.updateProjectionMatrix();
+    });
+}

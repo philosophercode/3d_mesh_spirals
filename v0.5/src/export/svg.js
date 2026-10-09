@@ -2,8 +2,6 @@
 // Uses the same outline methods as the 3D view
 
 function exportSVG(renderer, scene, camera, meshGroup, params, orbitControls) {
-    // Use the selected outline method from params
-    const outlineMethod = params.outlineMethod || 'Angular Binning';
     // Update controls and matrices to ensure sync
     orbitControls.update();
     camera.updateMatrixWorld();
@@ -11,8 +9,7 @@ function exportSVG(renderer, scene, camera, meshGroup, params, orbitControls) {
     meshGroup.updateMatrixWorld(true);
     renderer.render(scene, camera);
     
-    const width = window.innerWidth;
-    const height = window.innerHeight;
+    const { width, height } = getViewportSize();
     
     // SVG will be created later after we calculate the bounding box
     let svg = '';
@@ -27,7 +24,8 @@ function exportSVG(renderer, scene, camera, meshGroup, params, orbitControls) {
     }
     
     // Build depth buffer from occluding triangles
-    const depthBuffer = new Map(); // Map of "x,y" -> maxDepth (closest to camera)
+    // Per-pixel depth of the closest surface (larger = closer); -Infinity = empty
+    const depthBuffer = new Float64Array(width * height).fill(-Infinity);
     
     meshGroup.traverse((child) => {
         if (child.isMesh && child.material.colorWrite === false) {
@@ -112,12 +110,12 @@ function exportSVG(renderer, scene, camera, meshGroup, params, orbitControls) {
                                 const v = (dot00 * dot12 - dot01 * dot02) * invDenom;
                                 const w = 1 - u - v;
                                 
-                                const depth = w * p1.z + u * p2.z + v * p3.z;
-                                const key = `${Math.floor(x)},${Math.floor(y)}`;
+                                const depth = w * p1.z + v * p2.z + u * p3.z; // u weights p3, v weights p2
                                 
                                 // Store maximum depth (closest to camera)
-                                if (!depthBuffer.has(key) || depthBuffer.get(key) < depth) {
-                                    depthBuffer.set(key, depth);
+                                const idx = Math.floor(y) * width + Math.floor(x);
+                                if (depthBuffer[idx] < depth) {
+                                    depthBuffer[idx] = depth;
                                 }
                             }
                         }
@@ -176,11 +174,11 @@ function exportSVG(renderer, scene, camera, meshGroup, params, orbitControls) {
                                     const v = (dot00 * dot12 - dot01 * dot02) * invDenom;
                                     const w = 1 - u - v;
                                     
-                                    const depth = w * p1_back.z + u * p2_back.z + v * p3_back.z;
-                                    const key = `${Math.floor(x)},${Math.floor(y)}`;
+                                    const depth = w * p1_back.z + v * p2_back.z + u * p3_back.z;
                                     
-                                    if (!depthBuffer.has(key) || depthBuffer.get(key) < depth) {
-                                        depthBuffer.set(key, depth);
+                                    const idx = Math.floor(y) * width + Math.floor(x);
+                                    if (depthBuffer[idx] < depth) {
+                                        depthBuffer[idx] = depth;
                                     }
                                 }
                             }
@@ -192,22 +190,31 @@ function exportSVG(renderer, scene, camera, meshGroup, params, orbitControls) {
     });
     
     // Helper to check if a point is occluded
-    function isOccluded(x, y, depth, tolerance = 0.0001) {
-        const key = `${Math.floor(x)},${Math.floor(y)}`;
-        const bufferDepth = depthBuffer.get(key);
-        if (bufferDepth === undefined) return false; // No occlusion data, assume visible
-        
-        // Larger z values are closer to camera in this coordinate system
-        return depth < bufferDepth - tolerance;
+    // A point is hidden only if every pixel around it has a surface in front of
+    // it. Checking the 3x3 neighbourhood absorbs the sub-pixel offset between a
+    // line and the surface it lies on, which otherwise dashes lines on steep faces
+    function isOccluded(x, y, depth, tolerance = 1e-6) {
+        const px = Math.floor(x);
+        const py = Math.floor(y);
+        for (let dy = -1; dy <= 1; dy++) {
+            const row = py + dy;
+            if (row < 0 || row >= height) return false;
+            for (let dx = -1; dx <= 1; dx++) {
+                const col = px + dx;
+                if (col < 0 || col >= width) return false;
+                // Larger z values are closer to camera in this coordinate system
+                if (depth >= depthBuffer[row * width + col] - tolerance) return false;
+            }
+        }
+        return true;
     }
     
-    // Collect all line segments with depth for sorting
+    // Collect all visible line segments - these become the black engrave layer
     const elements = [];
-    const silhouetteEdges = new Set(); // Store keys for silhouette edges
     
-    // First pass: collect all visible line segments
     meshGroup.traverse((child) => {
-        if (child.isLine) {
+        // Skip the on-screen red outline preview; the cut layer is traced below
+        if (child.isLine && !child.userData.isOutline) {
             const positions = child.geometry.attributes.position;
             const points = [];
             for (let i = 0; i < positions.count; i++) {
@@ -228,210 +235,71 @@ function exportSVG(renderer, scene, camera, meshGroup, params, orbitControls) {
             for (let i = 0; i < points.length - 1; i++) {
                 const p1 = project3DTo2D(points[i]);
                 const p2 = project3DTo2D(points[i + 1]);
-                const avgZ = (p1.z + p2.z) / 2;
                 
-                // Check if line segment is visible
-                let isVisible = false;
+                // Sample the segment about once per pixel and keep only the parts
+                // that are visible, so lines stop where a surface hides them
+                // instead of being drawn whole when any point shows
                 const samples = Math.max(10, Math.ceil(Math.sqrt(
                     Math.pow(p2.x - p1.x, 2) + Math.pow(p2.y - p1.y, 2)
                 )));
-                
+                const visible = new Uint8Array(samples + 1);
                 for (let s = 0; s <= samples; s++) {
                     const t = s / samples;
                     const x = p1.x + (p2.x - p1.x) * t;
                     const y = p1.y + (p2.y - p1.y) * t;
                     const z = p1.z + (p2.z - p1.z) * t;
-                    
-                    // Check viewport bounds
-                    if (x < 0 || x >= width || y < 0 || y >= height) {
-                        continue;
-                    }
-                    
-                    // If any sample point is not occluded, the line is visible
-                    if (!isOccluded(x, y, z, 0.0001)) {
-                        isVisible = true;
-                        break;
-                    }
+                    const onScreen = x >= 0 && x < width && y >= 0 && y < height;
+                    visible[s] = onScreen && !isOccluded(x, y, z) ? 1 : 0;
                 }
                 
-                if (isVisible) {
-                    // Create a unique key for this edge segment
-                    const edgeKey = `${p1.x.toFixed(2)},${p1.y.toFixed(2)}-${p2.x.toFixed(2)},${p2.y.toFixed(2)}`;
-                    const reverseKey = `${p2.x.toFixed(2)},${p2.y.toFixed(2)}-${p1.x.toFixed(2)},${p1.y.toFixed(2)}`;
-                    
-                    elements.push({
-                        type: 'line',
-                        depth: avgZ,
-                        p1, p2,
-                        color, opacity, lineWidth,
-                        edgeKey, reverseKey
-                    });
+                // Bridge one- or two-sample gaps (depth-buffer noise), then emit each visible run
+                for (let s = 1; s < samples; s++) {
+                    if (visible[s]) continue;
+                    let e = s;
+                    while (e <= samples && !visible[e]) e++;
+                    if (visible[s - 1] && e <= samples && e - s <= 2) visible.fill(1, s, e);
+                    s = e;
+                }
+                
+                const lerp = (t) => ({
+                    x: p1.x + (p2.x - p1.x) * t,
+                    y: p1.y + (p2.y - p1.y) * t,
+                    z: p1.z + (p2.z - p1.z) * t
+                });
+                for (let s = 0; s <= samples; s++) {
+                    if (!visible[s]) continue;
+                    let e = s;
+                    while (e + 1 <= samples && visible[e + 1]) e++;
+                    if (e > s) {
+                        const a = lerp(s / samples);
+                        const b = lerp(e / samples);
+                        elements.push({
+                            type: 'line',
+                            depth: (a.z + b.z) / 2,
+                            p1: a, p2: b,
+                            color, opacity, lineWidth
+                        });
+                    }
+                    s = e;
                 }
             }
         }
     });
     
-    // Detect silhouette edges - only edges on the true perimeter/silhouette
-    // Method: For each angular direction, find ONLY the edge with maximum distance from center
-    if (elements.length > 0) {
-        // Calculate center of all visible points
-        let centerX = 0, centerY = 0, pointCount = 0;
-        elements.forEach(el => {
-            centerX += el.p1.x + el.p2.x;
-            centerY += el.p1.y + el.p2.y;
-            pointCount += 2;
-        });
-        centerX /= pointCount;
-        centerY /= pointCount;
-        
-        // For each edge, check if it's on the silhouette
-        // An edge is on the silhouette if it's at the maximum distance from center in its angular direction
-        const angularBins = 720; // Use more bins for better accuracy (2 per degree)
-        const maxDistances = new Array(angularBins).fill(0);
-        const maxDistanceEdges = new Array(angularBins).fill(null);
-        const minDistances = new Array(angularBins).fill(Infinity);
-        const minDistanceEdges = new Array(angularBins).fill(null);
-        const edgeContributions = new Map(); // Track which edges contribute to which bins
-        
-        elements.forEach(el => {
-            // Sample points along the edge
-            const samples = Math.max(10, Math.ceil(Math.sqrt(
-                Math.pow(el.p2.x - el.p1.x, 2) + Math.pow(el.p2.y - el.p1.y, 2)
-            )));
-            
-            const contributingBins = new Set();
-            
-            for (let s = 0; s <= samples; s++) {
-                const t = s / samples;
-                const x = el.p1.x + (el.p2.x - el.p1.x) * t;
-                const y = el.p1.y + (el.p2.y - el.p1.y) * t;
-                
-                // Calculate distance from center
-                const dx = x - centerX;
-                const dy = y - centerY;
-                const dist = Math.sqrt(dx * dx + dy * dy);
-                
-                // Calculate angle (0-360 degrees)
-                let angle = Math.atan2(dy, dx) * 180 / Math.PI;
-                if (angle < 0) angle += 360;
-                
-                // Map to bin (0 to angularBins-1)
-                const bin = Math.floor(angle * angularBins / 360) % angularBins;
-                contributingBins.add(bin);
-                
-                // Update if this is the maximum distance for this angle (outer edge)
-                if (dist > maxDistances[bin]) {
-                    maxDistances[bin] = dist;
-                    maxDistanceEdges[bin] = el;
-                }
-                
-                // Update if this is the minimum distance for this angle (inner edge)
-                if (dist < minDistances[bin]) {
-                    minDistances[bin] = dist;
-                    minDistanceEdges[bin] = el;
-                }
-            }
-            
-            // Store which bins this edge contributes to
-            edgeContributions.set(el.edgeKey, contributingBins);
-        });
-        
-        // Mark edges that are at maximum distance in any angular direction
-        // These are the edges on the perimeter/silhouette
-        maxDistanceEdges.forEach((edge) => {
-            if (edge) {
-                silhouetteEdges.add(edge.edgeKey);
-                silhouetteEdges.add(edge.reverseKey);
-            }
-        });
-        
-        // Mark inner edges (minimum distance) - only if significantly closer than average
-        const avgDist = elements.reduce((sum, el) => {
-            const midX = (el.p1.x + el.p2.x) / 2;
-            const midY = (el.p1.y + el.p2.y) / 2;
-            const dx = midX - centerX;
-            const dy = midY - centerY;
-            return sum + Math.sqrt(dx * dx + dy * dy);
-        }, 0) / elements.length;
-        
-        minDistanceEdges.forEach((edge, bin) => {
-            if (edge && edgeContributions.has(edge.edgeKey)) {
-                const bins = edgeContributions.get(edge.edgeKey);
-                if (bins.has(bin) && minDistances[bin] < avgDist * 0.7) {
-                    // Only mark as inner edge if it's significantly closer than average
-                    silhouetteEdges.add(edge.edgeKey);
-                    silhouetteEdges.add(edge.reverseKey);
-                }
-            }
-        });
-        
-        // Count how many angular bins each edge is the maximum for
-        const edgeSilhouetteCount = new Map();
-        maxDistanceEdges.forEach((edge, bin) => {
-            if (edge && edgeContributions.has(edge.edgeKey)) {
-                const bins = edgeContributions.get(edge.edgeKey);
-                if (bins.has(bin)) {
-                    const count = edgeSilhouetteCount.get(edge.edgeKey) || 0;
-                    edgeSilhouetteCount.set(edge.edgeKey, count + 1);
-                }
-            }
-        });
-        
-        // Filter to only keep edges that are consistently on the perimeter
-        // An edge must be max distance in at least 1 bin (be more permissive initially)
-        const minBinCount = 1; // Edge must be max in at least 1 angular bin
-        const edgesToRemove = new Set();
-        silhouetteEdges.forEach(key => {
-            const count = edgeSilhouetteCount.get(key) || 0;
-            if (count < minBinCount) {
-                edgesToRemove.add(key);
-            }
-        });
-        
-        // Remove edges that don't meet the threshold
-        edgesToRemove.forEach(key => {
-            silhouetteEdges.delete(key);
-        });
-        
-        // Also remove corresponding reverse keys
-        elements.forEach(el => {
-            if (edgesToRemove.has(el.edgeKey)) {
-                silhouetteEdges.delete(el.reverseKey);
-            }
-            if (edgesToRemove.has(el.reverseKey)) {
-                silhouetteEdges.delete(el.edgeKey);
-            }
-        });
-        
-        console.log(`Silhouette detection: ${silhouetteEdges.size} edges marked as perimeter`);
-    }
+    // Red cut layer: closed loops around the projected shape and its holes
+    const cutContours = computeCutContours(meshGroup, params, camera, width, height);
+    const holeCount = cutContours.filter(c => c.isHole).length;
+    console.log(`Cut contours: ${cutContours.length - holeCount} outer, ${holeCount} holes`);
     
     // Sort by depth (back to front - lower z values first)
     elements.sort((a, b) => a.depth - b.depth);
     
-    // Render all elements in sorted order
-    // First render regular lines, then render silhouette edges on top
-    const regularLines = [];
-    const outlineLines = [];
-    
-    elements.forEach(element => {
-        if (element.type === 'line') {
-            const isSilhouette = silhouetteEdges.has(element.edgeKey) || silhouetteEdges.has(element.reverseKey);
-            if (isSilhouette) {
-                outlineLines.push(element);
-            } else {
-                regularLines.push(element);
-            }
-        }
-    });
-    
-    console.log(`Rendering: ${regularLines.length} regular lines, ${outlineLines.length} outline lines`);
+    console.log(`Rendering: ${elements.length} engrave lines, ${cutContours.length} cut paths`);
     
     // Calculate bounding box of all elements
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    const allElements = [...regularLines, ...outlineLines];
     
-    if (allElements.length === 0) {
+    if (elements.length === 0 && cutContours.length === 0) {
         // No elements to render - create empty square with border
         const borderWidth = 3;
         const squareSize = 1000; // Default size
@@ -452,11 +320,19 @@ function exportSVG(renderer, scene, camera, meshGroup, params, orbitControls) {
         return;
     }
     
-    allElements.forEach(element => {
+    elements.forEach(element => {
         minX = Math.min(minX, element.p1.x, element.p2.x);
         minY = Math.min(minY, element.p1.y, element.p2.y);
         maxX = Math.max(maxX, element.p1.x, element.p2.x);
         maxY = Math.max(maxY, element.p1.y, element.p2.y);
+    });
+    cutContours.forEach(contour => {
+        contour.points.forEach(p => {
+            minX = Math.min(minX, p.x);
+            minY = Math.min(minY, p.y);
+            maxX = Math.max(maxX, p.x);
+            maxY = Math.max(maxY, p.y);
+        });
     });
     
     // Add padding around the shape (10% of the size)
@@ -487,14 +363,14 @@ function exportSVG(renderer, scene, camera, meshGroup, params, orbitControls) {
     
     // Create new SVG with square viewBox and red border
     svg = `<?xml version="1.0" encoding="UTF-8"?>
-<svg width="${squareSize}" height="${squareSize}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${squareSize} ${squareSize}">
+<svg width="${squareSize}" height="${squareSize}" xmlns="http://www.w3.org/2000/svg" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" viewBox="0 0 ${squareSize} ${squareSize}">
 <rect width="100%" height="100%" fill="${params.backgroundColor}"/>
 <rect x="0" y="0" width="${squareSize}" height="${squareSize}" fill="none" stroke="red" stroke-width="${borderWidth}"/>
-<g id="mesh">
+<g id="engrave" inkscape:groupmode="layer" inkscape:label="Engrave">
 `;
     
-    // Render regular lines first (with coordinate transformation)
-    regularLines.forEach(element => {
+    // Engrave layer: visible wireframe lines (with coordinate transformation)
+    elements.forEach(element => {
         const x1 = transformX(element.p1.x);
         const y1 = transformY(element.p1.y);
         const x2 = transformX(element.p2.x);
@@ -502,15 +378,16 @@ function exportSVG(renderer, scene, camera, meshGroup, params, orbitControls) {
         svg += `<line x1="${x1.toFixed(2)}" y1="${y1.toFixed(2)}" x2="${x2.toFixed(2)}" y2="${y2.toFixed(2)}" stroke="${element.color}" stroke-width="${element.lineWidth}" stroke-opacity="${element.opacity}" stroke-linecap="round"/>\n`;
     });
     
-    // Render silhouette edges in red with thicker stroke on top
-    // Outline width scales with lineWidth - make it 2.5x thicker for visibility
+    svg += `</g>\n<g id="cut" inkscape:groupmode="layer" inkscape:label="Cut">\n`;
+    
+    // Cut layer: one closed red path per contour, holes first so the part
+    // is cut free last. Outline width scales with lineWidth for visibility
     const outlineWidth = params.lineWidth * 2.5;
-    outlineLines.forEach(element => {
-        const x1 = transformX(element.p1.x);
-        const y1 = transformY(element.p1.y);
-        const x2 = transformX(element.p2.x);
-        const y2 = transformY(element.p2.y);
-        svg += `<line x1="${x1.toFixed(2)}" y1="${y1.toFixed(2)}" x2="${x2.toFixed(2)}" y2="${y2.toFixed(2)}" stroke="red" stroke-width="${outlineWidth}" stroke-opacity="1.0" stroke-linecap="round"/>\n`;
+    cutContours.forEach(contour => {
+        const d = contour.points.map((p, i) =>
+            `${i === 0 ? 'M' : 'L'}${transformX(p.x).toFixed(2)} ${transformY(p.y).toFixed(2)}`
+        ).join(' ') + ' Z';
+        svg += `<path d="${d}" fill="none" stroke="#ff0000" stroke-width="${outlineWidth}" stroke-linejoin="round"/>\n`;
     });
     
     svg += `</g>\n</svg>`;

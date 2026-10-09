@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>3D Mesh Spirals v0.5</title>
     <link rel="stylesheet" href="src/ui/styles.css">
 </head>
@@ -10,8 +10,28 @@
     <canvas id="canvas"></canvas>
     
     <div id="ui-panel">
-        <div class="ui-header">
+        <div class="ui-header" id="panelToggle" role="button" tabindex="0" aria-expanded="true" aria-controls="ui-panel">
             <h2>Controls</h2>
+            <span class="toggle-icon" aria-hidden="true"></span>
+        </div>
+        
+        <div class="ui-section">
+            <h3>Preset</h3>
+            <div class="control-group">
+                <label for="presetSelect">Start From</label>
+                <select id="presetSelect">
+                    <option value="">Custom</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label for="presetNameInput">Save Current As</label>
+                <div class="inline-row">
+                    <input type="text" id="presetNameInput" placeholder="Preset name" maxlength="60" autocomplete="off">
+                    <button id="savePresetBtn" class="btn-secondary btn-inline">Save</button>
+                </div>
+                <div class="hint-text" id="presetStatus">Saved presets stay in this browser.</div>
+                <button id="deletePresetBtn" class="btn-secondary" hidden>Delete This Preset</button>
+            </div>
         </div>
         
         <div class="ui-section">
@@ -53,6 +73,7 @@
             <div class="control-group">
                 <label for="outlineMethodSelect">Outline Method</label>
                 <select id="outlineMethodSelect">
+                    <option value="Silhouette Contour">Silhouette Contour (auto cut)</option>
                     <option value="Angular Binning">Angular Binning</option>
                     <option value="Face Normals">Face Normals</option>
                     <option value="Post-Projection">Post-Projection</option>
@@ -112,6 +133,7 @@
     <script src="src/geometry/tubeCap.js"></script>
     <script src="src/rendering/scene.js"></script>
     <script src="src/rendering/renderer.js"></script>
+    <script src="src/rendering/silhouette.js"></script>
     <script src="src/rendering/outline.js"></script>
     <script src="src/rendering/mesh.js"></script>
     <script src="src/export/svg.js"></script>
