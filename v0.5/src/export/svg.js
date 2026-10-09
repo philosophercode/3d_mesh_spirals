@@ -25,7 +25,8 @@ function exportSVG(renderer, scene, camera, meshGroup, params, orbitControls) {
     }
     
     // Build depth buffer from occluding triangles
-    const depthBuffer = new Map(); // Map of "x,y" -> maxDepth (closest to camera)
+    // Per-pixel depth of the closest surface (larger = closer); -Infinity = empty
+    const depthBuffer = new Float64Array(width * height).fill(-Infinity);
     
     meshGroup.traverse((child) => {
         if (child.isMesh && child.material.colorWrite === false) {
@@ -110,12 +111,12 @@ function exportSVG(renderer, scene, camera, meshGroup, params, orbitControls) {
                                 const v = (dot00 * dot12 - dot01 * dot02) * invDenom;
                                 const w = 1 - u - v;
                                 
-                                const depth = w * p1.z + u * p2.z + v * p3.z;
-                                const key = `${Math.floor(x)},${Math.floor(y)}`;
+                                const depth = w * p1.z + v * p2.z + u * p3.z; // u weights p3, v weights p2
                                 
                                 // Store maximum depth (closest to camera)
-                                if (!depthBuffer.has(key) || depthBuffer.get(key) < depth) {
-                                    depthBuffer.set(key, depth);
+                                const idx = Math.floor(y) * width + Math.floor(x);
+                                if (depthBuffer[idx] < depth) {
+                                    depthBuffer[idx] = depth;
                                 }
                             }
                         }
@@ -174,11 +175,11 @@ function exportSVG(renderer, scene, camera, meshGroup, params, orbitControls) {
                                     const v = (dot00 * dot12 - dot01 * dot02) * invDenom;
                                     const w = 1 - u - v;
                                     
-                                    const depth = w * p1_back.z + u * p2_back.z + v * p3_back.z;
-                                    const key = `${Math.floor(x)},${Math.floor(y)}`;
+                                    const depth = w * p1_back.z + v * p2_back.z + u * p3_back.z;
                                     
-                                    if (!depthBuffer.has(key) || depthBuffer.get(key) < depth) {
-                                        depthBuffer.set(key, depth);
+                                    const idx = Math.floor(y) * width + Math.floor(x);
+                                    if (depthBuffer[idx] < depth) {
+                                        depthBuffer[idx] = depth;
                                     }
                                 }
                             }
@@ -190,13 +191,23 @@ function exportSVG(renderer, scene, camera, meshGroup, params, orbitControls) {
     });
     
     // Helper to check if a point is occluded
-    function isOccluded(x, y, depth, tolerance = 0.0001) {
-        const key = `${Math.floor(x)},${Math.floor(y)}`;
-        const bufferDepth = depthBuffer.get(key);
-        if (bufferDepth === undefined) return false; // No occlusion data, assume visible
-        
-        // Larger z values are closer to camera in this coordinate system
-        return depth < bufferDepth - tolerance;
+    // A point is hidden only if every pixel around it has a surface in front of
+    // it. Checking the 3x3 neighbourhood absorbs the sub-pixel offset between a
+    // line and the surface it lies on, which otherwise dashes lines on steep faces
+    function isOccluded(x, y, depth, tolerance = 1e-6) {
+        const px = Math.floor(x);
+        const py = Math.floor(y);
+        for (let dy = -1; dy <= 1; dy++) {
+            const row = py + dy;
+            if (row < 0 || row >= height) return false;
+            for (let dx = -1; dx <= 1; dx++) {
+                const col = px + dx;
+                if (col < 0 || col >= width) return false;
+                // Larger z values are closer to camera in this coordinate system
+                if (depth >= depthBuffer[row * width + col] - tolerance) return false;
+            }
+        }
+        return true;
     }
     
     // Collect all visible line segments - these become the black engrave layer
@@ -225,39 +236,52 @@ function exportSVG(renderer, scene, camera, meshGroup, params, orbitControls) {
             for (let i = 0; i < points.length - 1; i++) {
                 const p1 = project3DTo2D(points[i]);
                 const p2 = project3DTo2D(points[i + 1]);
-                const avgZ = (p1.z + p2.z) / 2;
                 
-                // Check if line segment is visible
-                let isVisible = false;
+                // Sample the segment about once per pixel and keep only the parts
+                // that are visible, so lines stop where a surface hides them
+                // instead of being drawn whole when any point shows
                 const samples = Math.max(10, Math.ceil(Math.sqrt(
                     Math.pow(p2.x - p1.x, 2) + Math.pow(p2.y - p1.y, 2)
                 )));
-                
+                const visible = new Uint8Array(samples + 1);
                 for (let s = 0; s <= samples; s++) {
                     const t = s / samples;
                     const x = p1.x + (p2.x - p1.x) * t;
                     const y = p1.y + (p2.y - p1.y) * t;
                     const z = p1.z + (p2.z - p1.z) * t;
-                    
-                    // Check viewport bounds
-                    if (x < 0 || x >= width || y < 0 || y >= height) {
-                        continue;
-                    }
-                    
-                    // If any sample point is not occluded, the line is visible
-                    if (!isOccluded(x, y, z, 0.0001)) {
-                        isVisible = true;
-                        break;
-                    }
+                    const onScreen = x >= 0 && x < width && y >= 0 && y < height;
+                    visible[s] = onScreen && !isOccluded(x, y, z) ? 1 : 0;
                 }
                 
-                if (isVisible) {
-                    elements.push({
-                        type: 'line',
-                        depth: avgZ,
-                        p1, p2,
-                        color, opacity, lineWidth
-                    });
+                // Bridge one- or two-sample gaps (depth-buffer noise), then emit each visible run
+                for (let s = 1; s < samples; s++) {
+                    if (visible[s]) continue;
+                    let e = s;
+                    while (e <= samples && !visible[e]) e++;
+                    if (visible[s - 1] && e <= samples && e - s <= 2) visible.fill(1, s, e);
+                    s = e;
+                }
+                
+                const lerp = (t) => ({
+                    x: p1.x + (p2.x - p1.x) * t,
+                    y: p1.y + (p2.y - p1.y) * t,
+                    z: p1.z + (p2.z - p1.z) * t
+                });
+                for (let s = 0; s <= samples; s++) {
+                    if (!visible[s]) continue;
+                    let e = s;
+                    while (e + 1 <= samples && visible[e + 1]) e++;
+                    if (e > s) {
+                        const a = lerp(s / samples);
+                        const b = lerp(e / samples);
+                        elements.push({
+                            type: 'line',
+                            depth: (a.z + b.z) / 2,
+                            p1: a, p2: b,
+                            color, opacity, lineWidth
+                        });
+                    }
+                    s = e;
                 }
             }
         }
