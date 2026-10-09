@@ -128,7 +128,14 @@ function setupUI(params, sceneState, scene, gridHelper, updateMesh) {
     saveConfigBtn.addEventListener('click', () => {
         const config = {
             geometry: { ...params },
+            modifiers: Object.fromEntries(Object.entries(modifiers).map(([key, m]) => [key, m.enabled])),
             camera: {
+                zoom: sceneState.currentCamera.zoom,
+                up: {
+                    x: sceneState.currentCamera.up.x,
+                    y: sceneState.currentCamera.up.y,
+                    z: sceneState.currentCamera.up.z
+                },
                 position: {
                     x: sceneState.currentCamera.position.x,
                     y: sceneState.currentCamera.position.y,
@@ -168,6 +175,13 @@ function setupUI(params, sceneState, scene, gridHelper, updateMesh) {
             try {
                 const config = JSON.parse(event.target.result);
                 
+                // Load modifier switches before geometry so the controls show the right state
+                if (config.modifiers) {
+                    Object.entries(config.modifiers).forEach(([key, enabled]) => {
+                        if (modifiers[key]) modifiers[key].enabled = enabled;
+                    });
+                }
+                
                 // Load geometry parameters
                 if (config.geometry) {
                     Object.assign(params, config.geometry);
@@ -203,6 +217,15 @@ function setupUI(params, sceneState, scene, gridHelper, updateMesh) {
                         );
                     }
                     
+                    if (config.camera.zoom) {
+                        sceneState.currentCamera.zoom = config.camera.zoom;
+                        sceneState.currentCamera.updateProjectionMatrix();
+                    }
+                    
+                    // Older configs have no up vector: use the default
+                    const up = config.camera.up || { x: 0, y: 1, z: 0 };
+                    [sceneState.orthoCamera, sceneState.perspCamera].forEach(cam => cam.up.set(up.x, up.y, up.z));
+                    
                     sceneState.orbitControls.update();
                 }
             } catch (error) {
@@ -214,6 +237,46 @@ function setupUI(params, sceneState, scene, gridHelper, updateMesh) {
         };
         
         reader.readAsText(file);
+    });
+    
+    // Presets: geometry, modifier switches and camera framing in one step
+    const presetSelect = document.getElementById('presetSelect');
+    Object.entries(presets).forEach(([key, preset]) => {
+        const option = document.createElement('option');
+        option.value = key;
+        option.textContent = preset.label;
+        presetSelect.appendChild(option);
+    });
+    presetSelect.addEventListener('change', (e) => {
+        const preset = presets[e.target.value];
+        if (!preset) return;
+        
+        Object.entries(preset.modifiers || {}).forEach(([key, enabled]) => {
+            if (modifiers[key]) modifiers[key].enabled = enabled;
+        });
+        Object.assign(params, preset.params);
+        scene.background = new THREE.Color(params.backgroundColor);
+        gridHelper.visible = params.showGrid;
+        
+        if (preset.camera) {
+            const cam = preset.camera;
+            params.projection = cam.projection || params.projection;
+            updateCameraProjection(sceneState, params.projection);
+            const up = cam.up || { x: 0, y: 1, z: 0 };
+            [sceneState.orthoCamera, sceneState.perspCamera].forEach(c => c.up.set(up.x, up.y, up.z));
+            sceneState.currentCamera.position.set(cam.position.x, cam.position.y, cam.position.z);
+            sceneState.orbitControls.target.set(cam.target.x, cam.target.y, cam.target.z);
+            // Fit the preset's frame (world units) into this window
+            const aspect = window.innerWidth / window.innerHeight;
+            const visible = Math.max(cam.frameHeight, cam.frameWidth / aspect);
+            sceneState.currentCamera.zoom = 2 * sceneState.orthoSize / visible;
+            sceneState.currentCamera.updateProjectionMatrix();
+            sceneState.orbitControls.update();
+        }
+        
+        generateGeometryControls(params, updateMeshWithCamera);
+        updateMeshWithCamera();
+        syncUI();
     });
     
     // Initialize UI

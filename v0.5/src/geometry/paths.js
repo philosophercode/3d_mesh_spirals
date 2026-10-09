@@ -31,6 +31,38 @@ const pathGenerators = {
         }
     },
     
+    'snail-shell': {
+        name: 'Snail Shell (self-similar)',
+        computePath: (u, params) => {
+            // Logarithmic coil that shrinks at the same rate as the tube, like a
+            // real shell. Coil radius is a multiple of the tube radius; at
+            // 1 + eccentricity every cross-section touches the axis and the
+            // whorls close into a single point (the vortex)
+            const scale = computeRadiusAtU(u, params) / params.r0;
+            const coil = (params.snailCoil !== undefined ? params.snailCoil : 1) * params.r0 * scale;
+            const dir = params.snailDirection === 'Clockwise' ? -1 : 1;
+            const theta = (params.snailPhase || 0) + dir * u;
+            return new THREE.Vector3(coil * Math.cos(theta), coil * Math.sin(theta), 0);
+        },
+        computeTangent: (u, params) => {
+            // Cross-sections stay in the plane through the coil axis (as in a
+            // shell's growth line), so use the circumferential direction
+            const dir = params.snailDirection === 'Clockwise' ? -1 : 1;
+            const theta = (params.snailPhase || 0) + dir * u;
+            return new THREE.Vector3(-Math.sin(theta) * dir, Math.cos(theta) * dir, 0);
+        },
+        computeNormal: (u, params) => {
+            const dir = params.snailDirection === 'Clockwise' ? -1 : 1;
+            const theta = (params.snailPhase || 0) + dir * u;
+            return new THREE.Vector3(-Math.cos(theta), -Math.sin(theta), 0);
+        },
+        params: {
+            snailCoil: { type: 'range', min: 0.3, max: 3, step: 0.001, label: 'Coil Radius (x tube)' },
+            snailPhase: { type: 'range', min: -Math.PI, max: Math.PI, step: 0.001, label: 'Opening Angle' },
+            snailDirection: { type: 'select', options: ['Counter-clockwise', 'Clockwise'], label: 'Coil Direction' }
+        }
+    },
+    
     'helix': {
         name: 'Helix',
         computePath: (u, params) => {

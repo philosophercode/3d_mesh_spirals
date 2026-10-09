@@ -156,7 +156,7 @@ function generateGeometryControls(params, onUpdate) {
     }
     
     // Number of turns (for paths that use it)
-    if (params.pathType === 'spiral' || params.pathType === 'helix' || params.pathType === 'figure-8' || 
+    if (params.pathType === 'spiral' || params.pathType === 'snail-shell' || params.pathType === 'helix' || params.pathType === 'figure-8' || 
         params.pathType === 'spheroid-spiral' || params.pathType === 'sphere-spiral') {
         const nControl = createRangeControl('N', {
             type: 'range',
@@ -222,6 +222,10 @@ function generateGeometryControls(params, onUpdate) {
         label: 'Wall Thickness'
     }, params, onUpdate);
     container.appendChild(wallThicknessControl);
+    
+    container.appendChild(createRangeControl('wallHeightRatio', {
+        type: 'range', min: 0.1, max: 2, step: 0.01, label: 'Wall Top/Bottom (x side)'
+    }, params, onUpdate));
     
     // Modifiers section
     const modifiersHeader = document.createElement('h4');
@@ -335,5 +339,19 @@ function generateGeometryControls(params, onUpdate) {
         vDivControl.querySelector('.value-display').textContent = e.target.value;
     });
     container.appendChild(vDivControl);
+    
+    // Line density (lines are drawn on mesh edges, so counts snap to divisions)
+    container.appendChild(createRangeControl('meridianOffset', {
+        type: 'range', min: -Math.PI / 8, max: Math.PI / 8, step: 0.001, label: 'Grid Offset'
+    }, params, onUpdate));
+    
+    [['meridianLines', 'Meridian Lines', 8, 200], ['parallelLines', 'Parallel Lines', 8, 800]].forEach(([key, label, min, max]) => {
+        const control = createRangeControl(key, { type: 'range', min, max, step: 1, label }, params, onUpdate);
+        control.querySelector('.value-display').textContent = params[key];
+        control.querySelector('input[type="range"]').addEventListener('input', (e) => {
+            control.querySelector('.value-display').textContent = e.target.value;
+        });
+        container.appendChild(control);
+    });
 }
 
