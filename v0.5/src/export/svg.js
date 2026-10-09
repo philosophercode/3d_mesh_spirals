@@ -9,8 +9,7 @@ function exportSVG(renderer, scene, camera, meshGroup, params, orbitControls) {
     meshGroup.updateMatrixWorld(true);
     renderer.render(scene, camera);
     
-    const width = window.innerWidth;
-    const height = window.innerHeight;
+    const { width, height } = getViewportSize();
     
     // SVG will be created later after we calculate the bounding box
     let svg = '';

@@ -10,6 +10,7 @@ body {
     display: block;
     width: 100vw;
     height: 100vh;
+    touch-action: none; /* let orbit controls handle drags and pinches */
 }
 
 #ui-panel {
@@ -27,9 +28,45 @@ body {
 }
 
 .ui-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
     margin-bottom: 20px;
     padding-bottom: 15px;
     border-bottom: 2px solid #e0e0e0;
+    cursor: pointer;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.ui-header:focus-visible {
+    outline: 2px solid #000;
+    outline-offset: 4px;
+}
+
+/* Chevron: points down when open, up when collapsed */
+.toggle-icon {
+    width: 10px;
+    height: 10px;
+    margin-right: 4px;
+    border-right: 2px solid #333;
+    border-bottom: 2px solid #333;
+    transform: translateY(-3px) rotate(45deg);
+    transition: transform 0.2s;
+}
+
+#ui-panel.collapsed .toggle-icon {
+    transform: translateY(3px) rotate(-135deg);
+}
+
+#ui-panel.collapsed > :not(.ui-header) {
+    display: none;
+}
+
+#ui-panel.collapsed .ui-header {
+    margin-bottom: 0;
+    padding-bottom: 0;
+    border-bottom: none;
 }
 
 .ui-header h2 {
@@ -200,3 +237,97 @@ body {
     background: #555;
 }
 
+
+.hint-text {
+    margin-top: 6px;
+    font-size: 12px;
+    line-height: 1.4;
+    color: #777;
+}
+
+.inline-row {
+    display: flex;
+    gap: 8px;
+}
+
+.inline-row input[type="text"] {
+    flex: 1;
+    min-width: 0;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 14px;
+}
+
+.btn-inline {
+    width: auto;
+    margin-top: 0;
+    padding: 8px 14px;
+}
+
+/* Phones: controls become a bottom sheet that can be collapsed to a bar */
+@media (max-width: 700px) {
+    #ui-panel {
+        top: auto;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        width: auto;
+        max-height: 55vh;
+        padding: 0 16px calc(16px + env(safe-area-inset-bottom, 0px));
+        border-radius: 14px 14px 0 0;
+        box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15);
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    #ui-panel .ui-header {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        margin: 0 -16px 16px;
+        padding: 16px;
+        background: #ffffff;
+    }
+    
+    #ui-panel.collapsed {
+        padding-bottom: env(safe-area-inset-bottom, 0px);
+    }
+    
+    #ui-panel.collapsed .ui-header {
+        margin-bottom: 0;
+        padding-bottom: 16px;
+    }
+    
+    /* 16px text stops iOS zooming into focused fields */
+    .control-group select,
+    .inline-row input[type="text"] {
+        font-size: 16px;
+        min-height: 44px;
+    }
+    
+    .control-group input[type="range"] {
+        height: 8px;
+        margin: 10px 0 6px;
+    }
+    
+    .control-group input[type="range"]::-webkit-slider-thumb {
+        width: 26px;
+        height: 26px;
+    }
+    
+    .control-group input[type="range"]::-moz-range-thumb {
+        width: 26px;
+        height: 26px;
+    }
+    
+    .control-group input[type="checkbox"] {
+        width: 24px;
+        height: 24px;
+    }
+    
+    .btn-primary,
+    .btn-secondary {
+        min-height: 44px;
+        font-size: 16px;
+    }
+}

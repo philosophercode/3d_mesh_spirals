@@ -4,8 +4,7 @@
 function createOutlineAngularBinning(allLines, camera, params) {
     if (allLines.length === 0) return [];
     
-    const width = window.innerWidth;
-    const height = window.innerHeight;
+    const { width, height } = getViewportSize();
     
     function project3DTo2D(point) {
         const vector = point.clone();
@@ -401,8 +400,7 @@ function createOutlineFaceNormals(meshGroup, camera, params) {
 function createOutlinePostProjection(allLines, camera, params) {
     if (allLines.length === 0) return [];
     
-    const width = window.innerWidth;
-    const height = window.innerHeight;
+    const { width, height } = getViewportSize();
     
     function project3DTo2D(point) {
         const vector = point.clone();
@@ -674,8 +672,7 @@ function createOutlineNPR(meshGroup, camera, params) {
 // Method 5: Silhouette Contour - traced boundary of the projected solid.
 // Same contours the SVG export writes as the red cut layer.
 function createOutlineSilhouette(meshGroup, camera, params) {
-    const width = window.innerWidth;
-    const height = window.innerHeight;
+    const { width, height } = getViewportSize();
     const contours = computeCutContours(meshGroup, params, camera, width, height, {
         resolution: Math.max(width, height)
     });
